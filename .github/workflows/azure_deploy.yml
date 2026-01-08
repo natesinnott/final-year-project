@@ -29,18 +29,25 @@ jobs:
           echo "== .next/standalone =="
           ls -la .next/standalone
           test -f .next/standalone/server.js
-
-      - name: Create deploy bundle (server.js at root)
+          
+      - name: Create deploy bundle (standalone + full .next)
         run: |
           rm -rf deploy
-          mkdir -p deploy/.next
+          mkdir -p deploy
+      
+          # Standalone runtime (server.js + minimal node_modules)
           cp -r .next/standalone/* deploy/
-          cp -r .next/static deploy/.next/static
+      
+          # Full Next build output so BUILD_ID + manifests exist
+          mkdir -p deploy/.next
+          rsync -a --delete --exclude='cache' .next/ deploy/.next/
+      
+          # Public assets
           cp -r public deploy/public
-
-          echo "== deploy folder =="
-          ls -la deploy | sed -n '1,200p'
+      
+          # Sanity checks
           test -f deploy/server.js
+          test -f deploy/.next/BUILD_ID
 
       - name: Zip bundle
         run: |
