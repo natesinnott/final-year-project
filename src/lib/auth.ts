@@ -2,11 +2,6 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";
 
-const dbUrl = process.env.DATABASE_URL;
-if (!dbUrl) {
-    throw new Error("DATABASE_URL is not set in environment variables.");
-}
-
 const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
 };
