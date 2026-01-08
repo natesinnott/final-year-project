@@ -8,46 +8,41 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Install dependencies
+      - name: Install
         run: npm ci
 
-      - name: Build Next.js (with required env vars)
+      - name: Build
         run: npm run build
 
-      - name: Create standalone deployment bundle
+      - name: Verify standalone exists
+        run: |
+          ls -la .next
+          ls -la .next/standalone
+          test -f .next/standalone/server.js
+
+      - name: Create deploy bundle (standalone to root)
         run: |
           rm -rf deploy
           mkdir -p deploy/.next
-
-          # Standalone server (includes minimal node_modules)
           cp -r .next/standalone/* deploy/
-
-          # Static assets required at runtime
           cp -r .next/static deploy/.next/static
-
-          # Public assets
           cp -r public deploy/public
-
-          # Optional: package.json for reference
           cp package.json deploy/package.json
 
-      - name: Zip deployment bundle
+      - name: Zip bundle
         run: |
           cd deploy
           zip -r ../release.zip .
           cd ..
 
-      - name: Deploy to Azure Web App
+      - name: Deploy
         uses: azure/webapps-deploy@v3
         with:
           app-name: app-theatre-web
