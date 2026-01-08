@@ -8,6 +8,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,20 +22,25 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Verify standalone exists
+      - name: Verify Next standalone output exists
         run: |
+          echo "== .next =="
           ls -la .next
+          echo "== .next/standalone =="
           ls -la .next/standalone
           test -f .next/standalone/server.js
 
-      - name: Create deploy bundle (standalone to root)
+      - name: Create deploy bundle (server.js at root)
         run: |
           rm -rf deploy
           mkdir -p deploy/.next
           cp -r .next/standalone/* deploy/
           cp -r .next/static deploy/.next/static
           cp -r public deploy/public
-          cp package.json deploy/package.json
+
+          echo "== deploy folder =="
+          ls -la deploy | sed -n '1,200p'
+          test -f deploy/server.js
 
       - name: Zip bundle
         run: |
