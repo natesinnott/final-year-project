@@ -19,34 +19,32 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // App subdomain should land under /app routes.
+  // App subdomain serves all protected routes directly.
   if (hostname === APP_HOST) {
+    url.hostname = APP_HOST;
     if (pathname === "/") {
       url.pathname = "/app";
-      return NextResponse.rewrite(url);
-    }
-
-    if (pathname === "/login") {
+    } else if (pathname === "/login") {
       url.pathname = "/app/login";
-      return NextResponse.rewrite(url);
-    }
-
-    if (pathname === "/admin") {
+    } else if (pathname === "/admin") {
       url.pathname = "/app/admin";
-      return NextResponse.rewrite(url);
     }
-
-    return NextResponse.next();
+    return NextResponse.rewrite(url);
   }
 
-  // Marketing domain should redirect protected paths to the app subdomain.
+  // Marketing domain should only serve the public landing page.
   if (hostname === MARKETING_HOST) {
-    if (
-      pathname === "/login" ||
-      pathname === "/admin" ||
-      pathname.startsWith("/app")
-    ) {
+    if (pathname !== "/") {
       url.hostname = APP_HOST;
+      if (pathname === "/login") {
+        url.pathname = "/app/login";
+      } else if (pathname === "/admin") {
+        url.pathname = "/app/admin";
+      } else if (pathname.startsWith("/app")) {
+        url.pathname = pathname;
+      } else {
+        url.pathname = `/app${pathname}`;
+      }
       return NextResponse.redirect(url);
     }
   }
