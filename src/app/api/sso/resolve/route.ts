@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Resolves an email domain to the configured SSO providerId (if any).
 type ResolvePayload = {
   email?: string;
 };
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Valid email is required." }, { status: 400 });
   }
 
+  // Match the email domain to an organisation's SSO config.
   const orgDomain = await prisma.organisationDomain.findUnique({
     where: { domain },
     include: {
@@ -32,6 +34,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ providerId: null });
   }
 
+  // Provider IDs must match those generated in auth.ts.
   let providerId: string | null = null;
   if (config.provider === "ENTRA") {
     providerId = `entra-${config.id}`;

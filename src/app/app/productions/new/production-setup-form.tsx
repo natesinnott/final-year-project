@@ -7,6 +7,7 @@ type Props = {
   organisationName: string;
 };
 
+// Creates a production and assigns the creator as director.
 export default function ProductionSetupForm({ organisationName }: Props) {
   const router = useRouter();
   const [formState, setFormState] = useState({
@@ -25,6 +26,7 @@ export default function ProductionSetupForm({ organisationName }: Props) {
     setMessage(null);
 
     try {
+      // Server validates admin role and creates production + membership.
       const response = await fetch("/api/productions/create", {
         method: "POST",
         headers: {

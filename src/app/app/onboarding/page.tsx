@@ -8,6 +8,7 @@ export const metadata = {
   title: "StageSuite | Create organisation",
 };
 
+// First-time organisation setup for new admins.
 export default async function OnboardingPage() {
   const session = await auth.api.getSession({
     headers: await headers(),

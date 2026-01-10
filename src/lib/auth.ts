@@ -9,6 +9,7 @@ import {
 } from "better-auth/plugins/generic-oauth";
 import { decryptSecret } from "@/lib/crypto";
 
+// Keep a single Prisma client in dev to avoid hot-reload connection churn.
 const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
 };
@@ -17,6 +18,7 @@ const prisma = globalForPrisma.prisma ?? new PrismaClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
+// Optional enterprise SSO providers configured via env vars.
 const enterpriseOAuthProviders: GenericOAuthConfig[] = [
     process.env.ENTRA_CLIENT_ID &&
     process.env.ENTRA_CLIENT_SECRET &&
@@ -49,12 +51,14 @@ const enterpriseOAuthProviders: GenericOAuthConfig[] = [
         : null,
 ].filter(isGenericOAuthConfig);
 
+// Narrow nullable configs after env-gated construction.
 function isGenericOAuthConfig(
     config: GenericOAuthConfig | null | undefined,
 ): config is GenericOAuthConfig {
     return Boolean(config);
 }
 
+// Base auth options shared by static and dynamic auth instances.
 const baseAuthOptions = {
     database: prismaAdapter(prisma, { provider: "postgresql" }),
     secret: process.env.BETTER_AUTH_SECRET!,
@@ -73,6 +77,7 @@ const baseAuthOptions = {
     trustedOrigins: ["https://appleid.apple.com"],
 };
 
+// Static auth instance with only globally configured SSO providers.
 export const auth = betterAuth({
     ...baseAuthOptions,
     emailAndPassword: {
@@ -87,11 +92,13 @@ export const auth = betterAuth({
         : [],
 });
 
+// Dynamic auth instance that injects per-organisation SSO providers.
 export async function getAuthWithSsoProviders() {
     const ssoConfigs = await prisma.organisationSsoConfig.findMany({
         where: { enabled: true },
     });
 
+    // Build provider configs per org, decrypting stored secrets.
     const dynamicProviders: GenericOAuthConfig[] = ssoConfigs
         .map((config): GenericOAuthConfig | null => {
             let clientSecret: string;
@@ -108,6 +115,7 @@ export async function getAuthWithSsoProviders() {
 
             if (config.provider === "ENTRA") {
                 const tenantId = config.tenantId?.trim() || "common";
+                // Entra doesn't expose a discovery URL for multi-tenant routing.
                 return {
                     providerId: `entra-${config.id}`,
                     authorizationUrl: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`,
@@ -123,6 +131,7 @@ export async function getAuthWithSsoProviders() {
                 if (!config.issuer) {
                     return null;
                 }
+                // Okta uses issuer-based OIDC discovery.
                 return {
                     providerId: `okta-${config.id}`,
                     discoveryUrl: `${config.issuer.replace(/\/$/, "")}/.well-known/openid-configuration`,
@@ -133,6 +142,7 @@ export async function getAuthWithSsoProviders() {
             }
 
             if (config.provider === "GOOGLE_WORKSPACE") {
+                // Google Workspace uses the standard Google OIDC discovery endpoint.
                 return {
                     providerId: `google-workspace-${config.id}`,
                     discoveryUrl:
@@ -152,6 +162,7 @@ export async function getAuthWithSsoProviders() {
         ...dynamicProviders,
     ];
 
+    // Create a fresh auth instance with merged provider config.
     return betterAuth({
         ...baseAuthOptions,
         emailAndPassword: {

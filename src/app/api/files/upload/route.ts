@@ -5,6 +5,7 @@ import { buildStoragePath, getUploadsContainerClient } from "@/lib/azure-blob";
 
 export const runtime = "nodejs";
 
+// Uploads a file to Azure Blob Storage, then records metadata in Prisma.
 export async function POST(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers });
   const userId = session?.user?.id;
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing productionId" }, { status: 400 });
   }
 
+  // Only members of the production can upload files to it.
   const productionMember = await prisma.productionMember.findFirst({
     where: {
       userId,
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
       ? rolesValue.split(",").map((role) => role.trim())
       : [];
 
+  // Upload directly from the app to keep storage paths consistent.
   const containerClient = await getUploadsContainerClient();
   const storagePath = buildStoragePath(organisationId, file.name);
   const blobClient = containerClient.getBlockBlobClient(storagePath);

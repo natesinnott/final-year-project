@@ -7,6 +7,7 @@ export const metadata = {
   title: "StageSuite | Productions",
 };
 
+// Lists productions in the org and allows members to enter dashboards.
 export default async function ProductionsPage() {
   const session = await auth.api.getSession({
     headers: await headers(),

@@ -8,6 +8,7 @@ export const metadata = {
   title: "StageSuite | SSO setup",
 };
 
+// Admin-only SSO configuration entry point.
 export default async function SsoSetupPage() {
   const session = await auth.api.getSession({
     headers: await headers(),

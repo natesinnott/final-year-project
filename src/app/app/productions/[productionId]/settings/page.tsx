@@ -30,6 +30,7 @@ export default async function ProductionSettingsPage({
   }
 
   const resolvedParams = await params;
+  // Load production + org to enforce permission checks.
   const production = await prisma.production.findUnique({
     where: { id: resolvedParams.productionId },
     include: { organisation: true },
@@ -39,6 +40,7 @@ export default async function ProductionSettingsPage({
     redirect("/app/productions");
   }
 
+  // Allow org admins or director-roles to manage settings.
   const membership = await prisma.membership.findFirst({
     where: { userId, organisationId: production.organisationId },
   });

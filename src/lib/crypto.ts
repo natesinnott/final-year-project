@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 
+// AES-256-GCM key used to encrypt SSO secrets at rest.
 const SECRET_KEY_ENV = "SSO_SECRET_KEY";
 
+// Load and validate the base64-encoded 32-byte key from env.
 function getSecretKey() {
   const key = process.env[SECRET_KEY_ENV];
   if (!key) {
@@ -16,6 +18,7 @@ function getSecretKey() {
   return buffer;
 }
 
+// Encrypts secrets using AES-256-GCM with a random IV.
 export function encryptSecret(plainText: string) {
   const key = getSecretKey();
   const iv = crypto.randomBytes(12);
@@ -30,6 +33,7 @@ export function encryptSecret(plainText: string) {
   return Buffer.concat([iv, tag, encrypted]).toString("base64");
 }
 
+// Decrypts AES-256-GCM secrets stored as base64(iv + tag + ciphertext).
 export function decryptSecret(encryptedValue: string) {
   const key = getSecretKey();
   const buffer = Buffer.from(encryptedValue, "base64");

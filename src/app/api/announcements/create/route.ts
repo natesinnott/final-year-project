@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Only directors and stage managers can post announcements by default.
 const POSTING_ROLES = new Set(["DIRECTOR", "STAGE_MANAGER"]);
 
 export async function POST(request: Request) {
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
+  // Ensure the production belongs to the organisation in the request.
   const production = await prisma.production.findUnique({
     where: { id: productionId },
   });
@@ -37,6 +39,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Production not found" }, { status: 404 });
   }
 
+  // Org admins can always post; production roles can if allowed.
   const membership = await prisma.membership.findFirst({
     where: { userId, organisationId },
   });
@@ -53,6 +56,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Persist the announcement and mark as published immediately.
   const created = await prisma.announcement.create({
     data: {
       title,

@@ -85,6 +85,7 @@ export default function LoginPage() {
     setIsLoading(true);
     setSsoError(null);
     try {
+      // Resolve the org-specific provider from the user's email domain.
       const response = await fetch("/api/sso/resolve", {
         method: "POST",
         headers: {
@@ -120,6 +121,7 @@ export default function LoginPage() {
     setIsLoading(true);
     setEmailPasswordError(null);
     try {
+      // Email/password sign-in for non-SSO users.
       await authClient.signIn.email({
         email: emailPassword.email,
         password: emailPassword.password,
@@ -138,6 +140,7 @@ export default function LoginPage() {
     setIsLoading(true);
     setEmailPasswordError(null);
     try {
+      // Create a local account with email/password for the demo.
       await authClient.signUp.email({
         name: emailPassword.name || emailPassword.email.split("@")[0] || "User",
         email: emailPassword.email,

@@ -7,6 +7,7 @@ type Props = {
   userName: string;
 };
 
+// Creates a new organisation and assigns the current user as admin.
 export default function OnboardingForm({ userName }: Props) {
   const router = useRouter();
   const [formState, setFormState] = useState({
@@ -24,6 +25,7 @@ export default function OnboardingForm({ userName }: Props) {
     setError(null);
 
     try {
+      // Create org + admin membership, then route to org details.
       const response = await fetch("/api/organisations/bootstrap", {
         method: "POST",
         headers: {

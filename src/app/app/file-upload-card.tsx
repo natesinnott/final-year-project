@@ -9,6 +9,7 @@ type FileUploadCardProps = {
   productionRoles: string[];
 };
 
+// Uploads a file through the app so we can control storage paths and RBAC.
 export default function FileUploadCard({
   organisationId,
   productionId,
@@ -46,6 +47,7 @@ export default function FileUploadCard({
         formData.append("visibleToRoles", selectedRoles.join(","));
       }
 
+      // Server handles storage upload and DB record creation.
       const response = await fetch("/api/files/upload", {
         method: "POST",
         body: formData,

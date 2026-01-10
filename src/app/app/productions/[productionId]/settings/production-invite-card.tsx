@@ -10,6 +10,7 @@ type ProductionInviteCardProps = {
   productionRoles: string[];
 };
 
+// Generates shareable invite links with optional expiry and usage limits.
 export default function ProductionInviteCard({
   productionId,
   productionName,
@@ -34,6 +35,7 @@ export default function ProductionInviteCard({
     setMessage(null);
 
     try {
+      // Create invite on the server and build a shareable URL.
       const response = await fetch("/api/productions/invites", {
         method: "POST",
         headers: {
@@ -64,6 +66,7 @@ export default function ProductionInviteCard({
 
   async function handleCopy() {
     if (!inviteLink) return;
+    // Use clipboard API for quick sharing.
     await navigator.clipboard.writeText(inviteLink);
     setMessage("Invite link copied to clipboard.");
   }

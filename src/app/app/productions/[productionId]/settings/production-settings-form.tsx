@@ -23,6 +23,7 @@ function formatDate(date: string | null) {
   return iso.slice(0, 10);
 }
 
+// Client-side form for updating production metadata and director roles.
 export default function ProductionSettingsForm({
   production,
   productionRoles,
@@ -62,6 +63,7 @@ export default function ProductionSettingsForm({
     setMessage(null);
 
     try {
+      // PATCH with normalized values to keep server-side validation simple.
       const response = await fetch("/api/productions/update", {
         method: "PATCH",
         headers: {

@@ -18,6 +18,7 @@ export default async function InvitePage({
   });
 
   const resolvedParams = await params;
+  // Load invite details to show production info and validate expiry.
   const invite = await prisma.productionInvite.findUnique({
     where: { token: resolvedParams.token },
     include: { production: true },

@@ -8,6 +8,7 @@ export const metadata = {
   title: "StageSuite | Organisation settings",
 };
 
+// Organisation profile settings for admins.
 export default async function OrganisationPage() {
   const session = await auth.api.getSession({
     headers: await headers(),

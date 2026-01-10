@@ -9,6 +9,7 @@ export const metadata = {
 
 const roleOptions = ["ADMIN", "DIRECTOR", "STAGE_MANAGER", "MEMBER"];
 
+// Organisation-level admin overview for role assignments (UI-only for now).
 export default async function AdminPage() {
   const session = await auth.api.getSession({
     headers: await headers(),

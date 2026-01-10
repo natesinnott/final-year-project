@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { SsoProvider } from "@prisma/client";
 
+// Admin-only endpoint to save/read organisation SSO configuration and domain routing.
 type ConfigPayload = {
   provider?: "ENTRA" | "OKTA" | "GOOGLE_WORKSPACE";
   clientId?: string;
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
 
   const payload = (await request.json()) as ConfigPayload;
 
+  // Guard required fields before encrypting secrets.
   if (!payload.provider || !payload.clientId || !payload.clientSecret) {
     return NextResponse.json(
       { error: "Provider, clientId, and clientSecret are required." },
@@ -51,6 +53,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Client ID is required." }, { status: 400 });
   }
 
+  // Normalize domains for deterministic matching.
   const domains = (payload.domains ?? [])
     .map((domain) => domain.trim().toLowerCase())
     .filter(Boolean);
@@ -61,6 +64,7 @@ export async function POST(request: Request) {
 
   const organisationId = membership.organisationId;
 
+  // Update the SSO config and overwrite domain mappings in a single transaction.
   await prisma.$transaction(async (tx) => {
     const encryptedSecret = encryptSecret(clientSecret);
     await tx.organisationSsoConfig.upsert({
@@ -84,6 +88,7 @@ export async function POST(request: Request) {
       },
     });
 
+    // Replace existing domain entries to keep routing deterministic.
     await tx.organisationDomain.deleteMany({
       where: { organisationId },
     });
@@ -130,6 +135,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
   }
 
+  // Return decrypted secrets so admins can see/update the current config.
   let ssoConfig = null;
   if (organisation.ssoConfig) {
     try {

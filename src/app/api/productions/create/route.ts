@@ -18,6 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Only org admins can create productions.
   const membership = await prisma.membership.findFirst({
     where: { userId, role: "ADMIN" },
   });
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Production name is required." }, { status: 400 });
   }
 
+  // Create production and seed the creator as a director.
   const production = await prisma.production.create({
     data: {
       name,

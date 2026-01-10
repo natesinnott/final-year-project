@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
+// Creates the first organisation for a user and assigns them as ADMIN.
 type BootstrapPayload = {
   name?: string;
   primaryLocation?: string;
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
     where: { userId },
   });
 
+  // Prevent multiple orgs per user in the current onboarding flow.
   if (existingMembership) {
     return NextResponse.json(
       { error: "User already belongs to an organisation." },

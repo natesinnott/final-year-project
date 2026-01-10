@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
+// Updates organisation profile details (admin-only).
 type UpdatePayload = {
   name?: string;
   primaryLocation?: string;

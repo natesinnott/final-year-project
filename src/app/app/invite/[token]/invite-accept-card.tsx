@@ -9,6 +9,7 @@ type InviteAcceptCardProps = {
   role: string;
 };
 
+// Accepts a production invite and redirects into the app dashboard.
 export default function InviteAcceptCard({
   token,
   productionName,
@@ -23,6 +24,7 @@ export default function InviteAcceptCard({
     setMessage(null);
 
     try {
+      // Server validates token and adds the user to the production.
       const response = await fetch("/api/productions/invites/accept", {
         method: "POST",
         headers: {

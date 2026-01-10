@@ -8,6 +8,7 @@ export const metadata = {
   title: "StageSuite | New production",
 };
 
+// Admin-only entry point for creating a new production.
 export default async function ProductionSetupPage() {
   const session = await auth.api.getSession({
     headers: await headers(),

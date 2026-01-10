@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 const APP_HOST = "app.fyp.nathanielsinnott.com";
 const MARKETING_HOST = "fyp.nathanielsinnott.com";
 
+// Allow local dev to use a single host without rewrites.
 function isLocalHost(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1";
 }
@@ -13,10 +14,12 @@ export function middleware(request: NextRequest) {
   const hostname = request.headers.get("host")?.split(":")[0] ?? "";
   const pathname = url.pathname;
 
+  // Skip host-based routing on localhost.
   if (isLocalHost(hostname)) {
     return NextResponse.next();
   }
 
+  // App subdomain should land under /app routes.
   if (hostname === APP_HOST) {
     if (pathname === "/") {
       url.pathname = "/app";
@@ -36,6 +39,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Marketing domain should redirect protected paths to the app subdomain.
   if (hostname === MARKETING_HOST) {
     if (
       pathname === "/login" ||

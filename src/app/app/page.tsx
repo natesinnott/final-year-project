@@ -37,6 +37,7 @@ export default async function HomePage({
   }
 
   const userId = session.user?.id;
+  // Resolve the user's organisation membership (first org for now).
   const membership = userId
     ? await prisma.membership.findFirst({
         where: { userId },
@@ -49,6 +50,7 @@ export default async function HomePage({
   }
 
   const organisationId = membership.organisationId;
+  // Load all production memberships to populate the production picker.
   const productionMemberships = await prisma.productionMember.findMany({
     where: { userId, production: { organisationId } },
     include: { production: true },
@@ -66,6 +68,7 @@ export default async function HomePage({
   const selectedProductionId = Array.isArray(resolvedSearchParams?.productionId)
     ? resolvedSearchParams?.productionId[0]
     : resolvedSearchParams?.productionId;
+  // Select the production from query params or fall back to the first membership.
   const productionMembership =
     productionMemberships.find(
       (entry) => entry.productionId === selectedProductionId
@@ -77,6 +80,7 @@ export default async function HomePage({
     production.directorRoles.length > 0
       ? production.directorRoles
       : DEFAULT_DIRECTOR_ROLES;
+  // Admins or director-roles can manage production settings.
   const canManageProduction =
     membership.role === "ADMIN" || directorRoles.includes(productionMembership.role);
   const canPostAnnouncement =
@@ -94,6 +98,7 @@ export default async function HomePage({
     take: 5,
   });
 
+  // Placeholder data for the demo until scheduling is implemented.
   const upcomingRehearsals = [
     {
       title: "Act 1 Blocking",

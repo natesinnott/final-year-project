@@ -10,6 +10,7 @@ type AnnouncementComposerProps = {
   canPost: boolean;
 };
 
+// Client-only form to create announcements scoped to a production.
 export default function AnnouncementComposer({
   organisationId,
   productionId,
@@ -38,6 +39,7 @@ export default function AnnouncementComposer({
     setMessage(null);
 
     try {
+      // Persist announcement via API and refresh server data on success.
       const response = await fetch("/api/announcements/create", {
         method: "POST",
         headers: {

@@ -24,6 +24,7 @@ const defaultState: FormState = {
   enabled: true,
 };
 
+// Configures SSO routing and provider details for the organisation.
 export default function SsoSetupForm() {
   const [formState, setFormState] = useState<FormState>(defaultState);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,6 +34,7 @@ export default function SsoSetupForm() {
     let isMounted = true;
     async function fetchConfig() {
       try {
+        // Preload existing config so admins can edit it.
         const response = await fetch("/api/sso/config");
         if (!response.ok) {
           return;
@@ -69,6 +71,7 @@ export default function SsoSetupForm() {
     setMessage(null);
 
     try {
+      // Persist config and domain mappings via the API.
       const response = await fetch("/api/sso/config", {
         method: "POST",
         headers: {

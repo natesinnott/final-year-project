@@ -14,6 +14,7 @@ type Props = {
   initialValues: OrganisationFormValues;
 };
 
+// Updates organisation profile details via the API.
 export default function OrganisationForm({ initialValues }: Props) {
   const router = useRouter();
   const [formState, setFormState] = useState(initialValues);
@@ -26,6 +27,7 @@ export default function OrganisationForm({ initialValues }: Props) {
     setMessage(null);
 
     try {
+      // Persist updates, then refresh server-rendered data.
       const response = await fetch("/api/organisations/update", {
         method: "POST",
         headers: {

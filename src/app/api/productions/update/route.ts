@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Roles that can manage production settings by default.
 const DEFAULT_DIRECTOR_ROLES = ["DIRECTOR"];
 const PRODUCTION_ROLES = new Set([
   "DIRECTOR",
@@ -47,6 +48,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Missing productionId" }, { status: 400 });
   }
 
+  // Resolve production to confirm org ownership and permissions.
   const production = await prisma.production.findUnique({
     where: { id: productionId },
   });
@@ -55,6 +57,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Production not found" }, { status: 404 });
   }
 
+  // Admins or director-roles can update production details.
   const membership = await prisma.membership.findFirst({
     where: { userId, organisationId: production.organisationId },
   });
@@ -72,6 +75,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Normalize incoming values and persist updates.
   const updated = await prisma.production.update({
     where: { id: productionId },
     data: {

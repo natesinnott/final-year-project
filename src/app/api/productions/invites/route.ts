@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ProductionRole } from "@prisma/client";
 
+// Roles that can be assigned via invite links.
 const DEFAULT_DIRECTOR_ROLES = ["DIRECTOR"];
 const PRODUCTION_ROLES = new Set<ProductionRole>([
   "DIRECTOR",
@@ -22,6 +23,7 @@ type CreateInvitePayload = {
   maxUses?: number;
 };
 
+// Ensure director roles defaults are used if the list is empty.
 function normalizeRoles(roles: string[] | undefined) {
   if (!roles || roles.length === 0) {
     return DEFAULT_DIRECTOR_ROLES;
@@ -44,6 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing productionId" }, { status: 400 });
   }
 
+  // Fetch production to resolve org ownership and roles.
   const production = await prisma.production.findUnique({
     where: { id: productionId },
   });
@@ -52,6 +55,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Production not found" }, { status: 404 });
   }
 
+  // Admins or director-roles can generate invites.
   const membership = await prisma.membership.findFirst({
     where: { userId, organisationId: production.organisationId },
   });
@@ -69,10 +73,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Random token used in the shareable invite link.
   const token = randomBytes(24).toString("hex");
   const expiresAt = payload.expiresAt ? new Date(payload.expiresAt) : null;
 
-  const inviteRole = payload.role && PRODUCTION_ROLES.has(payload.role as ProductionRole)
+  const inviteRole =
+    payload.role && PRODUCTION_ROLES.has(payload.role as ProductionRole)
     ? (payload.role as ProductionRole)
     : "CAST";
 
