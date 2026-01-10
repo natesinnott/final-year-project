@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ProductionRole } from "@prisma/client";
 
 const DEFAULT_DIRECTOR_ROLES = ["DIRECTOR"];
-const PRODUCTION_ROLES = new Set([
+const PRODUCTION_ROLES = new Set<ProductionRole>([
   "DIRECTOR",
   "STAGE_MANAGER",
   "CHOREOGRAPHER",
@@ -71,8 +72,8 @@ export async function POST(request: Request) {
   const token = randomBytes(24).toString("hex");
   const expiresAt = payload.expiresAt ? new Date(payload.expiresAt) : null;
 
-  const inviteRole = payload.role && PRODUCTION_ROLES.has(payload.role)
-    ? payload.role
+  const inviteRole = payload.role && PRODUCTION_ROLES.has(payload.role as ProductionRole)
+    ? (payload.role as ProductionRole)
     : "CAST";
 
   const created = await prisma.productionInvite.create({

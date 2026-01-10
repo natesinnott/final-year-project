@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
+import { SsoProvider } from "@prisma/client";
 
 type ConfigPayload = {
   provider?: "ENTRA" | "OKTA" | "GOOGLE_WORKSPACE";
@@ -37,6 +38,18 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+  const provider = payload.provider as SsoProvider;
+  const clientId = payload.clientId.trim();
+  const clientSecret = payload.clientSecret.trim();
+  if (!clientSecret) {
+    return NextResponse.json(
+      { error: "Client secret is required." },
+      { status: 400 }
+    );
+  }
+  if (!clientId) {
+    return NextResponse.json({ error: "Client ID is required." }, { status: 400 });
+  }
 
   const domains = (payload.domains ?? [])
     .map((domain) => domain.trim().toLowerCase())
@@ -49,21 +62,21 @@ export async function POST(request: Request) {
   const organisationId = membership.organisationId;
 
   await prisma.$transaction(async (tx) => {
-    const encryptedSecret = encryptSecret(payload.clientSecret);
+    const encryptedSecret = encryptSecret(clientSecret);
     await tx.organisationSsoConfig.upsert({
       where: { organisationId },
       create: {
         organisationId,
-        provider: payload.provider,
-        clientId: payload.clientId,
+        provider,
+        clientId,
         clientSecret: encryptedSecret,
         issuer: payload.issuer?.trim() || null,
         tenantId: payload.tenantId?.trim() || null,
         enabled: payload.enabled ?? true,
       },
       update: {
-        provider: payload.provider,
-        clientId: payload.clientId,
+        provider,
+        clientId,
         clientSecret: encryptedSecret,
         issuer: payload.issuer?.trim() || null,
         tenantId: payload.tenantId?.trim() || null,

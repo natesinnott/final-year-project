@@ -11,14 +11,15 @@ export const metadata = {
 export default async function InvitePage({
   params,
 }: {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }) {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
 
+  const resolvedParams = await params;
   const invite = await prisma.productionInvite.findUnique({
-    where: { token: params.token },
+    where: { token: resolvedParams.token },
     include: { production: true },
   });
 
