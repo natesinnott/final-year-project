@@ -20,17 +20,37 @@ enum Role {
   MEMBER
 }
 
+enum SsoProvider {
+  ENTRA
+  OKTA
+  GOOGLE_WORKSPACE
+}
+
+enum ProductionRole {
+  DIRECTOR
+  STAGE_MANAGER
+  CHOREOGRAPHER
+  MUSIC_DIRECTOR
+  CAST
+  CREW
+  VIEWER
+}
+
 model User {
-  id            String       @id
-  name          String
-  email         String
-  emailVerified Boolean      @default(false)
-  image         String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  memberships   Membership[]
+  id                String             @id
+  name              String
+  email             String
+  emailVerified     Boolean            @default(false)
+  image             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  sessions          Session[]
+  accounts          Account[]
+  memberships       Membership[]
+  announcements     Announcement[]
+  fileUploads       FileAsset[]
+  productionMembers ProductionMember[]
+  productionInvites ProductionInvite[]
 
   @@unique([email])
   @@map("user")
@@ -85,12 +105,46 @@ model Verification {
 }
 
 model Organisation {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  primaryLocation String?
+  description     String?
+  contactEmail    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  memberships Membership[]
+  memberships   Membership[]
+  announcements Announcement[]
+  fileAssets    FileAsset[]
+  domains       OrganisationDomain[]
+  ssoConfig     OrganisationSsoConfig?
+  productions   Production[]
+}
+
+model OrganisationDomain {
+  id             String   @id @default(cuid())
+  domain         String   @unique
+  createdAt      DateTime @default(now())
+  organisationId String
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+}
+
+model OrganisationSsoConfig {
+  id             String      @id @default(cuid())
+  provider       SsoProvider
+  clientId       String
+  clientSecret   String
+  issuer         String?
+  tenantId       String?
+  enabled        Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  organisationId String      @unique
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
 }
 
 model Membership {
@@ -106,4 +160,104 @@ model Membership {
 
   @@unique([userId, organisationId])
   @@index([organisationId])
+}
+
+model Announcement {
+  id             String    @id @default(cuid())
+  title          String
+  body           String
+  visibleToRoles String[]  @default([])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  publishedAt    DateTime?
+
+  organisationId String
+  productionId   String
+  createdById    String
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  production   Production   @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+  @@index([productionId])
+  @@index([createdById])
+}
+
+model FileAsset {
+  id             String   @id @default(cuid())
+  originalName   String
+  storagePath    String
+  mimeType       String
+  size           Int
+  visibleToRoles String[] @default([])
+  createdAt      DateTime @default(now())
+
+  organisationId String
+  productionId   String
+  uploadedById   String
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  production   Production   @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  uploadedBy   User         @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+  @@index([productionId])
+  @@index([uploadedById])
+}
+
+model Production {
+  id             String    @id @default(cuid())
+  name           String
+  description    String?
+  rehearsalStart DateTime?
+  rehearsalEnd   DateTime?
+  venue          String?
+  directorRoles  String[]  @default([])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organisationId String
+
+  organisation  Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  members       ProductionMember[]
+  announcements Announcement[]
+  files         FileAsset[]
+  invites       ProductionInvite[]
+
+  @@index([organisationId])
+}
+
+model ProductionMember {
+  id        String         @id @default(cuid())
+  role      ProductionRole
+  createdAt DateTime       @default(now())
+
+  productionId String
+  userId       String
+
+  production Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([productionId, userId])
+  @@index([userId])
+}
+
+model ProductionInvite {
+  id        String         @id @default(cuid())
+  token     String         @unique
+  role      ProductionRole
+  expiresAt DateTime?
+  maxUses   Int?
+  uses      Int            @default(0)
+  createdAt DateTime       @default(now())
+
+  productionId String
+  createdById  String
+
+  production Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([productionId])
+  @@index([createdById])
 }
