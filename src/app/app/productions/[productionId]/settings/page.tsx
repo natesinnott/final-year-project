@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import ProductionSettingsForm from "./production-settings-form";
 import ProductionInviteCard from "./production-invite-card";
+import ProductionMembersCard from "./production-members-card";
 
 export const metadata = {
   title: "StageSuite | Production settings",
@@ -72,6 +73,12 @@ export default async function ProductionSettingsPage({
     "VIEWER",
   ];
 
+  const productionMembers = await prisma.productionMember.findMany({
+    where: { productionId: production.id },
+    include: { user: true },
+    orderBy: { createdAt: "asc" },
+  });
+
   return (
     <main className="min-h-dvh bg-slate-950 text-slate-100 p-6">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
@@ -121,6 +128,16 @@ export default async function ProductionSettingsPage({
             productionRoles={productionRoles}
           />
         </div>
+        <ProductionMembersCard
+          productionId={production.id}
+          members={productionMembers.map((member) => ({
+            userId: member.userId,
+            name: member.user.name,
+            email: member.user.email,
+            role: member.role,
+          }))}
+          productionRoles={productionRoles}
+        />
       </div>
     </main>
   );

@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import InviteAcceptCard from "./invite-accept-card";
+import InviteAuthCard from "./invite-auth-card";
 
 export const metadata = {
   title: "StageSuite | Accept invite",
@@ -21,7 +21,10 @@ export default async function InvitePage({
   // Load invite details to show production info and validate expiry.
   const invite = await prisma.productionInvite.findUnique({
     where: { token: resolvedParams.token },
-    include: { production: true },
+    include: {
+      production: { include: { organisation: true } },
+      createdBy: true,
+    },
   });
 
   if (!invite) {
@@ -60,18 +63,24 @@ export default async function InvitePage({
     );
   }
 
-  if (!session) {
-    redirect("/login");
-  }
-
   return (
     <main className="min-h-dvh bg-slate-950 text-slate-100 p-6">
       <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
-        <InviteAcceptCard
-          token={invite.token}
-          productionName={invite.production.name}
-          role={invite.role}
-        />
+        {session ? (
+          <InviteAcceptCard
+            token={invite.token}
+            productionName={invite.production.name}
+            role={invite.role}
+          />
+        ) : (
+          <InviteAuthCard
+            token={invite.token}
+            productionName={invite.production.name}
+            organisationName={invite.production.organisation?.name}
+            inviterName={invite.createdBy?.name}
+            role={invite.role}
+          />
+        )}
       </div>
     </main>
   );

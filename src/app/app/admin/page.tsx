@@ -2,14 +2,23 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import ProductionAccessManager from "./production-access-manager";
 
 export const metadata = {
   title: "StageSuite | Administration",
 };
 
-const roleOptions = ["ADMIN", "DIRECTOR", "STAGE_MANAGER", "MEMBER"];
+const productionRoles = [
+  "DIRECTOR",
+  "STAGE_MANAGER",
+  "CHOREOGRAPHER",
+  "MUSIC_DIRECTOR",
+  "CAST",
+  "CREW",
+  "VIEWER",
+];
 
-// Organisation-level admin overview for role assignments (UI-only for now).
+// Organisation-level admin overview for production access management.
 export default async function AdminPage() {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -19,17 +28,76 @@ export default async function AdminPage() {
     redirect("/login");
   }
 
-  const organisations = await prisma.organisation.findMany({
+  const userId = session.user?.id;
+  if (!userId) {
+    redirect("/login");
+  }
+
+  const adminMembership = await prisma.membership.findFirst({
+    where: { userId, role: "ADMIN" },
+    include: { organisation: true },
+  });
+
+  if (!adminMembership) {
+    redirect("/app");
+  }
+
+  const organisation = await prisma.organisation.findUnique({
+    where: { id: adminMembership.organisationId },
     include: {
       memberships: {
-        include: {
-          user: true,
-        },
+        include: { user: true },
         orderBy: { createdAt: "asc" },
       },
     },
+  });
+
+  if (!organisation) {
+    redirect("/app");
+  }
+
+  const productionMembers = await prisma.productionMember.findMany({
+    where: { production: { organisationId: organisation.id } },
+    include: { production: true, user: true },
     orderBy: { createdAt: "asc" },
   });
+
+  const userAccessMap = new Map<
+    string,
+    { userId: string; name: string; email: string; productions: { productionId: string; productionName: string; role: string }[] }
+  >();
+
+  organisation.memberships.forEach((membership) => {
+    userAccessMap.set(membership.userId, {
+      userId: membership.userId,
+      name: membership.user.name,
+      email: membership.user.email,
+      productions: [],
+    });
+  });
+
+  productionMembers.forEach((member) => {
+    const entry =
+      userAccessMap.get(member.userId) ??
+      {
+        userId: member.userId,
+        name: member.user.name,
+        email: member.user.email,
+        productions: [],
+      };
+
+    entry.productions.push({
+      productionId: member.productionId,
+      productionName: member.production.name,
+      role: member.role,
+    });
+
+    userAccessMap.set(member.userId, entry);
+  });
+
+  const userAccess = Array.from(userAccessMap.values()).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
 
   return (
     <main className="min-h-dvh bg-slate-950 text-slate-100 p-6">
@@ -41,8 +109,8 @@ export default async function AdminPage() {
                 Administration
               </h1>
               <p className="mt-2 text-sm text-slate-300">
-                Assign roles and manage permissions per organisation and
-                production. Role updates will be wired up next.
+                Manage production access and keep roles up to date across your
+                organisation.
               </p>
             </div>
             <a
@@ -54,87 +122,10 @@ export default async function AdminPage() {
           </div>
         </header>
 
-        <section className="grid gap-6">
-          {organisations.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-              No organisations yet. Create an organisation to start assigning
-              roles.
-            </div>
-          ) : (
-            organisations.map((organisation) => (
-              <div
-                key={organisation.id}
-                className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">
-                      {organisation.name}
-                    </h2>
-                    <p className="text-sm text-slate-400">
-                      {organisation.memberships.length} members
-                    </p>
-                  </div>
-                  <button
-                    className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-400"
-                    disabled
-                  >
-                    Invite member (coming soon)
-                  </button>
-                </div>
-
-                <div className="mt-4 overflow-hidden rounded-xl border border-slate-800">
-                  <div className="grid grid-cols-[2fr_1fr_1fr] gap-3 border-b border-slate-800 bg-slate-950/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    <div>Name</div>
-                    <div>Role</div>
-                    <div>Actions</div>
-                  </div>
-                  {organisation.memberships.map((membership) => (
-                    <div
-                      key={membership.id}
-                      className="grid grid-cols-[2fr_1fr_1fr] gap-3 border-b border-slate-800 px-4 py-3 text-sm text-slate-200"
-                    >
-                      <div>
-                        <div className="font-medium text-white">
-                          {membership.user.name}
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          {membership.user.email}
-                        </div>
-                      </div>
-                      <div>
-                        <select
-                          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-300"
-                          defaultValue={membership.role}
-                          disabled
-                        >
-                          {roleOptions.map((role) => (
-                            <option key={role} value={role}>
-                              {role}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <button
-                          className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-400"
-                          disabled
-                        >
-                          Update (soon)
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {organisation.memberships.length === 0 ? (
-                    <div className="px-4 py-6 text-sm text-slate-400">
-                      No members assigned yet.
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ))
-          )}
-        </section>
+        <ProductionAccessManager
+          productionRoles={productionRoles}
+          users={userAccess}
+        />
       </div>
     </main>
   );

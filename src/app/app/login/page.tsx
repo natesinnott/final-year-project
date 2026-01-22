@@ -16,10 +16,40 @@ export default function LoginPage() {
     name: "",
     email: "",
     password: "",
+    confirmPassword: "",
   });
   const [emailPasswordError, setEmailPasswordError] = useState<string | null>(
     null
   );
+
+  function getAuthResultError(result: unknown) {
+    if (!result || typeof result !== "object") return null;
+    if (!("error" in result)) return null;
+    const error = (result as { error?: unknown }).error;
+    if (!error) return null;
+    if (typeof error === "string") return error;
+    if (typeof error === "object") {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === "string") return message;
+    }
+    return "Unable to authenticate.";
+  }
+
+  function getEmailSignupError(err: unknown) {
+    const message = err instanceof Error ? err.message : "";
+    const normalized = message.toLowerCase();
+    if (
+      normalized.includes("already exists") ||
+      normalized.includes("user exists") ||
+      normalized.includes("email exists") ||
+      normalized.includes("credential account not found") ||
+      normalized.includes("duplicate") ||
+      normalized.includes("unique constraint")
+    ) {
+      return "An account with this email already exists. Please sign in instead.";
+    }
+    return message || "Unable to create account.";
+  }
 
   async function signInWithGoogle() {
     setIsLoading(true);
@@ -122,11 +152,15 @@ export default function LoginPage() {
     setEmailPasswordError(null);
     try {
       // Email/password sign-in for non-SSO users.
-      await authClient.signIn.email({
+      const result = await authClient.signIn.email({
         email: emailPassword.email,
         password: emailPassword.password,
         callbackURL: "/app",
       });
+      const error = getAuthResultError(result);
+      if (error) {
+        throw new Error(error);
+      }
     } catch (err) {
       setEmailPasswordError(
         err instanceof Error ? err.message : "Unable to sign in."
@@ -140,17 +174,33 @@ export default function LoginPage() {
     setIsLoading(true);
     setEmailPasswordError(null);
     try {
+      if (emailPassword.password !== emailPassword.confirmPassword) {
+        throw new Error("Passwords do not match.");
+      }
       // Create a local account with email/password for the demo.
-      await authClient.signUp.email({
+      const signUpResult = await authClient.signUp.email({
         name: emailPassword.name || emailPassword.email.split("@")[0] || "User",
         email: emailPassword.email,
         password: emailPassword.password,
         callbackURL: "/app",
       });
+      const signUpError = getAuthResultError(signUpResult);
+      if (signUpError) {
+        throw new Error(signUpError);
+      }
+
+      // Ensure the user is signed in after account creation.
+      const signInResult = await authClient.signIn.email({
+        email: emailPassword.email,
+        password: emailPassword.password,
+        callbackURL: "/app",
+      });
+      const signInError = getAuthResultError(signInResult);
+      if (signInError) {
+        throw new Error(signInError);
+      }
     } catch (err) {
-      setEmailPasswordError(
-        err instanceof Error ? err.message : "Unable to create account."
-      );
+      setEmailPasswordError(getEmailSignupError(err));
     } finally {
       setIsLoading(false);
     }
@@ -349,41 +399,54 @@ export default function LoginPage() {
                       }
                       className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
                     />
-                    <input
-                      type="password"
-                      placeholder="Password"
-                      value={emailPassword.password}
-                      onChange={(event) =>
-                        setEmailPassword((prev) => ({
-                          ...prev,
-                          password: event.target.value,
-                        }))
-                      }
-                      className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                    />
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <button
-                        onClick={signInWithEmail}
-                        disabled={
-                          isLoading ||
-                          emailPassword.email.length === 0 ||
-                          emailPassword.password.length === 0
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={emailPassword.password}
+                    onChange={(event) =>
+                      setEmailPassword((prev) => ({
+                        ...prev,
+                        password: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Confirm password"
+                    value={emailPassword.confirmPassword}
+                    onChange={(event) =>
+                      setEmailPassword((prev) => ({
+                        ...prev,
+                        confirmPassword: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      onClick={signInWithEmail}
+                      disabled={
+                        isLoading ||
+                        emailPassword.email.length === 0 ||
+                        emailPassword.password.length === 0
                         }
                         className="inline-flex w-full items-center justify-center rounded-full border border-slate-700 bg-slate-950/30 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-100 hover:border-slate-500 disabled:opacity-60"
                       >
                         Sign in
                       </button>
-                      <button
-                        onClick={signUpWithEmail}
-                        disabled={
-                          isLoading ||
-                          emailPassword.email.length === 0 ||
-                          emailPassword.password.length === 0
-                        }
-                        className="inline-flex w-full items-center justify-center rounded-full bg-amber-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950 hover:bg-amber-200 disabled:opacity-60"
-                      >
-                        Create account
-                      </button>
+                    <button
+                      onClick={signUpWithEmail}
+                      disabled={
+                        isLoading ||
+                        emailPassword.email.length === 0 ||
+                        emailPassword.password.length === 0 ||
+                        emailPassword.confirmPassword.length === 0
+                      }
+                      className="inline-flex w-full items-center justify-center rounded-full bg-amber-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950 hover:bg-amber-200 disabled:opacity-60"
+                    >
+                      Create account
+                    </button>
                     </div>
                   </div>
                   {emailPasswordError ? (
