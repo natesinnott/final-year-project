@@ -91,7 +91,7 @@ export default function AnnouncementComposer({
           Message
         </label>
         <textarea
-          className="mt-2 min-h-[120px] w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+          className="mt-2 min-h-30 w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-sm text-slate-100 placeholder:text-slate-500"
           placeholder="Share the details here."
           value={body}
           onChange={(event) => setBody(event.target.value)}

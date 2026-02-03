@@ -18,6 +18,9 @@ export default function LoginPage() {
     password: "",
     confirmPassword: "",
   });
+  const [emailAuthMode, setEmailAuthMode] = useState<"signIn" | "signUp">(
+    "signIn"
+  );
   const [emailPasswordError, setEmailPasswordError] = useState<string | null>(
     null
   );
@@ -374,80 +377,140 @@ export default function LoginPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                     Email and password
                   </p>
-                  <div className="mt-4 grid gap-3">
-                    <input
-                      type="text"
-                      placeholder="Full name"
-                      value={emailPassword.name}
-                      onChange={(event) =>
-                        setEmailPassword((prev) => ({
-                          ...prev,
-                          name: event.target.value,
-                        }))
-                      }
-                      className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                    />
-                    <input
-                      type="email"
-                      placeholder="Email address"
-                      value={emailPassword.email}
-                      onChange={(event) =>
-                        setEmailPassword((prev) => ({
-                          ...prev,
-                          email: event.target.value,
-                        }))
-                      }
-                      className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                    />
-                  <input
-                    type="password"
-                    placeholder="Password"
-                    value={emailPassword.password}
-                    onChange={(event) =>
-                      setEmailPassword((prev) => ({
-                        ...prev,
-                        password: event.target.value,
-                      }))
-                    }
-                    className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                  />
-                  <input
-                    type="password"
-                    placeholder="Confirm password"
-                    value={emailPassword.confirmPassword}
-                    onChange={(event) =>
-                      setEmailPassword((prev) => ({
-                        ...prev,
-                        confirmPassword: event.target.value,
-                      }))
-                    }
-                    className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                  />
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <button
-                      onClick={signInWithEmail}
-                      disabled={
-                        isLoading ||
-                        emailPassword.email.length === 0 ||
-                        emailPassword.password.length === 0
-                        }
-                        className="inline-flex w-full items-center justify-center rounded-full border border-slate-700 bg-slate-950/30 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-100 hover:border-slate-500 disabled:opacity-60"
+                  <div className="mt-4">
+                    <div className="grid gap-2 rounded-2xl border border-slate-800/70 bg-slate-950/40 p-2 sm:grid-cols-2">
+                      <button
+                        onClick={() => {
+                          setEmailAuthMode("signIn");
+                          setEmailPasswordError(null);
+                        }}
+                        className={`rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
+                          emailAuthMode === "signIn"
+                            ? "bg-amber-300 text-slate-950"
+                            : "text-slate-300 hover:text-white"
+                        }`}
+                        disabled={isLoading}
                       >
                         Sign in
                       </button>
-                    <button
-                      onClick={signUpWithEmail}
-                      disabled={
-                        isLoading ||
-                        emailPassword.email.length === 0 ||
-                        emailPassword.password.length === 0 ||
-                        emailPassword.confirmPassword.length === 0
-                      }
-                      className="inline-flex w-full items-center justify-center rounded-full bg-amber-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950 hover:bg-amber-200 disabled:opacity-60"
-                    >
-                      Create account
-                    </button>
+                      <button
+                        onClick={() => {
+                          setEmailAuthMode("signUp");
+                          setEmailPasswordError(null);
+                        }}
+                        className={`rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
+                          emailAuthMode === "signUp"
+                            ? "bg-amber-300 text-slate-950"
+                            : "text-slate-300 hover:text-white"
+                        }`}
+                        disabled={isLoading}
+                      >
+                        Create account
+                      </button>
                     </div>
+
+                    {emailAuthMode === "signIn" ? (
+                      <div className="mt-4 grid gap-3">
+                        <input
+                          type="email"
+                          placeholder="Email address"
+                          value={emailPassword.email}
+                          onChange={(event) =>
+                            setEmailPassword((prev) => ({
+                              ...prev,
+                              email: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
+                        />
+                        <input
+                          type="password"
+                          placeholder="Password"
+                          value={emailPassword.password}
+                          onChange={(event) =>
+                            setEmailPassword((prev) => ({
+                              ...prev,
+                              password: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
+                        />
+                        <button
+                          onClick={signInWithEmail}
+                          disabled={
+                            isLoading ||
+                            emailPassword.email.length === 0 ||
+                            emailPassword.password.length === 0
+                          }
+                          className="inline-flex w-full items-center justify-center rounded-full border border-slate-700 bg-slate-950/30 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-100 hover:border-slate-500 disabled:opacity-60"
+                        >
+                          Sign in
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mt-4 grid gap-3">
+                        <input
+                          type="text"
+                          placeholder="Full name"
+                          value={emailPassword.name}
+                          onChange={(event) =>
+                            setEmailPassword((prev) => ({
+                              ...prev,
+                              name: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
+                        />
+                        <input
+                          type="email"
+                          placeholder="Email address"
+                          value={emailPassword.email}
+                          onChange={(event) =>
+                            setEmailPassword((prev) => ({
+                              ...prev,
+                              email: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
+                        />
+                        <input
+                          type="password"
+                          placeholder="Password"
+                          value={emailPassword.password}
+                          onChange={(event) =>
+                            setEmailPassword((prev) => ({
+                              ...prev,
+                              password: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
+                        />
+                        <input
+                          type="password"
+                          placeholder="Confirm password"
+                          value={emailPassword.confirmPassword}
+                          onChange={(event) =>
+                            setEmailPassword((prev) => ({
+                              ...prev,
+                              confirmPassword: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
+                        />
+                        <button
+                          onClick={signUpWithEmail}
+                          disabled={
+                            isLoading ||
+                            emailPassword.email.length === 0 ||
+                            emailPassword.password.length === 0 ||
+                            emailPassword.confirmPassword.length === 0
+                          }
+                          className="inline-flex w-full items-center justify-center rounded-full bg-amber-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950 hover:bg-amber-200 disabled:opacity-60"
+                        >
+                          Create account
+                        </button>
+                      </div>
+                    )}
                   </div>
                   {emailPasswordError ? (
                     <div className="mt-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-200">
