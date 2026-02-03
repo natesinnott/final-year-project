@@ -22,6 +22,15 @@ export async function getUploadsContainerClient() {
   return containerClient;
 }
 
+export async function deleteOrganisationBlobs(organisationId: string) {
+  const containerClient = await getUploadsContainerClient();
+  const prefix = `organisations/${organisationId}/files/`;
+
+  for await (const blob of containerClient.listBlobsFlat({ prefix })) {
+    await containerClient.deleteBlob(blob.name, { deleteSnapshots: "include" });
+  }
+}
+
 // Build a deterministic storage path scoped by organisation.
 export function buildStoragePath(organisationId: string, filename: string) {
   const safeName = filename

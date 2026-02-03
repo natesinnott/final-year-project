@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import SignOutButton from "../sign-out-button";
 import AnnouncementComposer from "./announcement-composer";
 import FileUploadCard from "./file-upload-card";
+import { isAppAdminEmail } from "@/lib/app-admin";
 
 export const metadata = {
   title: "StageSuite | Dashboard",
@@ -37,6 +38,7 @@ export default async function HomePage({
   }
 
   const userId = session.user?.id;
+  const isAppAdmin = isAppAdminEmail(session.user?.email);
   // Resolve the user's organisation membership (first org for now).
   const membership = userId
     ? await prisma.membership.findFirst({
@@ -176,6 +178,14 @@ export default async function HomePage({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {isAppAdmin ? (
+                <a
+                  href="/app/super-admin/organisations"
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+                >
+                  App Admin
+                </a>
+              ) : null}
               {membership?.role === "ADMIN" ? (
                 <>
                   <a
