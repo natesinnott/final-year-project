@@ -1,36 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+StageSuite is a rehearsal operations hub for theatre organisations. It centralizes production dashboards, announcements, file sharing, and role-based access so cast and crew always see what they need.
 
-## Getting Started
+## Current Functionality
+- Authentication: email/password, social providers, and organisation SSO routing
+- Onboarding: create an organisation and capture profile details
+- Productions: create productions, switch between them, and view dashboards
+- Announcements: post updates with optional role-based visibility
+- File sharing: upload files with role-based visibility
+- Production settings: rehearsal dates, venue, summary, and director-role management
+- Invites: generate shareable invite links with expiry and usage limits
+- Membership management: update roles and remove members
+- Admin tooling: org-wide production access management and SSO setup
 
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Planned
+- Scheduling: AI-assisted rehearsal planning and availability collection
+- Attendance: check-ins, absences, and reporting
+- Task assignments: track action items for cast and crew
+- Notifications: email/push delivery for announcements and reminders
+- Rich file library: tagging, search, and versioning
+- Role templates and custom roles per organisation
+- Advanced production management: budgeting and audition management

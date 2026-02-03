@@ -175,7 +175,25 @@ export default async function HomePage({
                 {membership?.role ?? "Member"}
               </p>
             </div>
-            <SignOutButton />
+            <div className="flex flex-wrap items-center gap-2">
+              {membership?.role === "ADMIN" ? (
+                <>
+                  <a
+                    href="/app/organisation"
+                    className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+                  >
+                    Org Settings
+                  </a>
+                  <a
+                    href="/app/productions/new"
+                    className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-slate-950"
+                  >
+                    Create Production
+                  </a>
+                </>
+              ) : null}
+              <SignOutButton />
+            </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3">
             <div>
