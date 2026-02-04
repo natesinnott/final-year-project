@@ -100,6 +100,15 @@ export default async function HomePage({
     take: 5,
   });
 
+  const visibleFiles =
+    membership.role === "ADMIN"
+      ? files
+      : files.filter(
+          (file) =>
+            file.visibleToRoles.length === 0 ||
+            file.visibleToRoles.includes(productionMembership.role)
+        );
+
   // Placeholder data for the demo until scheduling is implemented.
   const upcomingRehearsals = [
     {
@@ -367,13 +376,13 @@ export default async function HomePage({
               productionRoles={PRODUCTION_ROLES}
             />
             <div className="mt-4 grid gap-4">
-              {files.length === 0 ? (
+              {visibleFiles.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-800 p-6 text-sm text-slate-400">
                   No files uploaded yet. Choreography, music, and blocking files
                   will show up here.
                 </div>
               ) : (
-                files.map((file) => (
+                visibleFiles.map((file) => (
                   <div
                     key={file.id}
                     className="flex items-center justify-between rounded-xl border border-slate-800/70 bg-slate-950/40 p-4"
@@ -386,8 +395,16 @@ export default async function HomePage({
                         {Math.round(file.size / 1024)} KB · {file.mimeType}
                       </div>
                     </div>
-                    <div className="text-xs text-slate-500">
-                      {file.createdAt.toLocaleDateString()}
+                    <div className="flex items-center gap-3">
+                      <div className="text-xs text-slate-500">
+                        {file.createdAt.toLocaleDateString()}
+                      </div>
+                      <a
+                        href={`/api/files/download?id=${file.id}`}
+                        className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:border-slate-500"
+                      >
+                        Download
+                      </a>
                     </div>
                   </div>
                 ))
