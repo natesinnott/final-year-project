@@ -89,7 +89,17 @@ export default async function HomePage({
     membership.role === "ADMIN" || ANNOUNCEMENT_ROLES.has(productionMembership.role);
 
   const announcements = await prisma.announcement.findMany({
-    where: { organisationId, productionId },
+    where:
+      membership.role === "ADMIN"
+        ? { organisationId, productionId }
+        : {
+            organisationId,
+            productionId,
+            OR: [
+              { visibleToRoles: { isEmpty: true } },
+              { visibleToRoles: { has: productionMembership.role } },
+            ],
+          },
     orderBy: { createdAt: "desc" },
     take: 5,
   });
