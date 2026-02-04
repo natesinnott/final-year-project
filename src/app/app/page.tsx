@@ -198,7 +198,7 @@ export default async function HomePage({
               {membership?.role === "ADMIN" ? (
                 <>
                   <a
-                    href="/app/organisation"
+                    href="/app/organisation/settings"
                     className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
                   >
                     Org Settings
