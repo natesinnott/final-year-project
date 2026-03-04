@@ -265,6 +265,20 @@ export default async function HomePage({
                   Settings
                 </a>
               ) : null}
+              <a
+                href={`/app/productions/${productionId}/availability`}
+                className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+              >
+                Availability
+              </a>
+              {canAccessScheduling ? (
+                <a
+                  href={`/app/productions/${productionId}/availability/team`}
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+                >
+                  Team Availability
+                </a>
+              ) : null}
               {canAccessScheduling ? (
                 <a
                   href={`/app/productions/${productionId}/schedule`}

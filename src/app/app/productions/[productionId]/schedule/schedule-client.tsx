@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ScheduleClientProps = {
   productionId: string;
@@ -20,6 +20,20 @@ type SolveResult = {
   status?: string;
   placements?: BlockPlacement[];
   objective_value?: number | null;
+};
+
+type MissingMember = {
+  userId: string;
+  name: string;
+  role: string;
+};
+
+type CompletenessPayload = {
+  is_complete: boolean;
+  total_members: number;
+  required_members: number;
+  submitted_members: number;
+  missing_members: MissingMember[];
 };
 
 const TERMINAL_JOB_STATES = new Set(["completed", "failed"]);
@@ -129,6 +143,10 @@ export default function ScheduleClient({
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   const [healthMessage, setHealthMessage] = useState<string | null>(null);
 
+  const [completenessLoading, setCompletenessLoading] = useState(true);
+  const [completenessError, setCompletenessError] = useState<string | null>(null);
+  const [completeness, setCompleteness] = useState<CompletenessPayload | null>(null);
+
   const [payloadText, setPayloadText] = useState(examplePayload);
   const [isRunning, setIsRunning] = useState(false);
 
@@ -139,6 +157,33 @@ export default function ScheduleClient({
 
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
+
+  const loadCompleteness = useCallback(async () => {
+    setCompletenessLoading(true);
+    setCompletenessError(null);
+
+    try {
+      const response = await fetch(
+        `/api/productions/${encodeURIComponent(productionId)}/availability/completeness`,
+        { cache: "no-store" }
+      );
+      const body = (await parseResponseJson(response)) as
+        | (CompletenessPayload & { error?: string })
+        | null;
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(body, "Failed to load availability completeness."));
+      }
+
+      setCompleteness(body as CompletenessPayload);
+    } catch (error) {
+      setCompletenessError(
+        error instanceof Error ? error.message : "Failed to load completeness."
+      );
+    } finally {
+      setCompletenessLoading(false);
+    }
+  }, [productionId]);
 
   useEffect(() => {
     let isActive = true;
@@ -183,11 +228,12 @@ export default function ScheduleClient({
     }
 
     checkHealth();
+    loadCompleteness();
 
     return () => {
       isActive = false;
     };
-  }, [productionId]);
+  }, [productionId, loadCompleteness]);
 
   async function pollJobUntilComplete(currentJobId: string) {
     const maxAttempts = 30;
@@ -246,6 +292,18 @@ export default function ScheduleClient({
     setJobId(null);
     setJobStatus(null);
 
+    if (completenessLoading) {
+      setErrorMessage("Availability completeness is still loading.");
+      setIsRunning(false);
+      return;
+    }
+
+    if (!completeness?.is_complete) {
+      setErrorMessage("Scheduling is blocked until all required members submit availability.");
+      setIsRunning(false);
+      return;
+    }
+
     let parsedPayload: unknown;
     try {
       parsedPayload = JSON.parse(payloadText) as unknown;
@@ -270,6 +328,24 @@ export default function ScheduleClient({
       const body = await parseResponseJson(response);
       setLastHttpStatus(response.status);
       setLastResponse(body);
+
+      if (response.status === 409 && body && typeof body === "object") {
+        const conflictBody = body as {
+          missing_members?: MissingMember[];
+          total_members?: number;
+          required_members?: number;
+          submitted_members?: number;
+        };
+
+        setCompleteness((prev) => ({
+          is_complete: false,
+          total_members: conflictBody.total_members ?? prev?.total_members ?? 0,
+          required_members: conflictBody.required_members ?? prev?.required_members ?? 0,
+          submitted_members:
+            conflictBody.submitted_members ?? prev?.submitted_members ?? 0,
+          missing_members: conflictBody.missing_members ?? prev?.missing_members ?? [],
+        }));
+      }
 
       if (!response.ok) {
         setErrorMessage(getErrorMessage(body, "Solver request failed."));
@@ -302,13 +378,85 @@ export default function ScheduleClient({
       );
     } finally {
       setIsRunning(false);
+      loadCompleteness();
     }
   }
 
   const placements = useMemo(() => solveResult?.placements ?? [], [solveResult]);
+  const solveBlocked =
+    isRunning || completenessLoading || !completeness || !completeness.is_complete;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm lg:col-span-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Availability completeness
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-white">Scheduling readiness</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500 disabled:opacity-60"
+              onClick={loadCompleteness}
+              disabled={completenessLoading}
+            >
+              {completenessLoading ? "Checking..." : "Refresh"}
+            </button>
+            <span
+              className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${
+                completeness?.is_complete
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
+                  : "border-rose-500/40 bg-rose-500/10 text-rose-100"
+              }`}
+            >
+              {completeness?.is_complete
+                ? "Availability complete"
+                : "Availability incomplete"}
+            </span>
+          </div>
+        </div>
+
+        {completeness ? (
+          <div className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+              Total members: <span className="text-white">{completeness.total_members}</span>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+              Required: <span className="text-white">{completeness.required_members}</span>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+              Submitted: <span className="text-white">{completeness.submitted_members}</span>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+              Missing: <span className="text-white">{completeness.missing_members.length}</span>
+            </div>
+          </div>
+        ) : null}
+
+        {completeness && completeness.missing_members.length > 0 ? (
+          <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-4">
+            <p className="text-sm font-semibold text-rose-100">
+              Scheduling is blocked until these members submit at least one availability window:
+            </p>
+            <ul className="mt-2 space-y-1 text-sm text-rose-100/90">
+              {completeness.missing_members.map((member) => (
+                <li key={member.userId}>
+                  {member.name} ({member.role})
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {completenessError ? (
+          <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            {completenessError}
+          </div>
+        ) : null}
+      </section>
+
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -375,10 +523,15 @@ export default function ScheduleClient({
           <button
             className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
             onClick={handleRunSolve}
-            disabled={isRunning}
+            disabled={solveBlocked}
           >
             {isRunning ? "Running..." : "Run Solve"}
           </button>
+          {!completeness?.is_complete ? (
+            <p className="text-sm text-amber-200">
+              Solve is disabled until all required members submit availability.
+            </p>
+          ) : null}
           {errorMessage ? <p className="text-sm text-rose-300">{errorMessage}</p> : null}
         </div>
       </section>

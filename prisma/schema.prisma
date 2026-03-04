@@ -36,6 +36,11 @@ enum ProductionRole {
   VIEWER
 }
 
+enum AvailabilityKind {
+  AVAILABLE
+  UNAVAILABLE
+}
+
 model User {
   id                String             @id
   name              String
@@ -51,6 +56,7 @@ model User {
   fileUploads       FileAsset[]
   productionMembers ProductionMember[]
   productionInvites ProductionInvite[]
+  availability      AvailabilityWindow[]
 
   @@unique([email])
   @@map("user")
@@ -224,6 +230,7 @@ model Production {
   announcements Announcement[]
   files         FileAsset[]
   invites       ProductionInvite[]
+  availability  AvailabilityWindow[]
 
   @@index([organisationId])
 }
@@ -260,4 +267,23 @@ model ProductionInvite {
 
   @@index([productionId])
   @@index([createdById])
+}
+
+model AvailabilityWindow {
+  id        String           @id @default(cuid())
+  start     DateTime
+  end       DateTime
+  kind      AvailabilityKind @default(AVAILABLE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  productionId String
+  userId       String
+
+  production Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([productionId])
+  @@index([productionId, userId])
+  @@index([userId])
 }

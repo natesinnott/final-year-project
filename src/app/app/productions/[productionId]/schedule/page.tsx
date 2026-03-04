@@ -140,6 +140,18 @@ export default async function ProductionSchedulePage({
                 Back to dashboard
               </a>
               <a
+                href={`/app/productions/${production.id}/availability`}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
+              >
+                My availability
+              </a>
+              <a
+                href={`/app/productions/${production.id}/availability/team`}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
+              >
+                Team availability
+              </a>
+              <a
                 href={`/app/productions/${production.id}/settings`}
                 className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
               >

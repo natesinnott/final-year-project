@@ -2,17 +2,17 @@ import { prisma } from "@/lib/prisma";
 
 const DEFAULT_DIRECTOR_ROLES = ["DIRECTOR"];
 
-export async function canAccessProductionScheduling(
+export async function getProductionMemberContext(
   userId: string,
   productionId: string
-): Promise<boolean> {
+) {
   const production = await prisma.production.findUnique({
     where: { id: productionId },
-    select: { directorRoles: true },
+    select: { id: true, directorRoles: true },
   });
 
   if (!production) {
-    return false;
+    return null;
   }
 
   const productionMember = await prisma.productionMember.findUnique({
@@ -25,14 +25,32 @@ export async function canAccessProductionScheduling(
     select: { role: true },
   });
 
-  if (!productionMember) {
-    return false;
-  }
-
   const directorRoles =
     production.directorRoles.length > 0
       ? production.directorRoles
       : DEFAULT_DIRECTOR_ROLES;
 
-  return directorRoles.includes(productionMember.role);
+  return {
+    productionId: production.id,
+    productionMemberRole: productionMember?.role ?? null,
+    isProductionMember: Boolean(productionMember),
+    directorRoles,
+  };
+}
+
+export async function canAccessProduction(userId: string, productionId: string) {
+  const context = await getProductionMemberContext(userId, productionId);
+  return Boolean(context?.isProductionMember);
+}
+
+export async function canAccessProductionScheduling(
+  userId: string,
+  productionId: string
+): Promise<boolean> {
+  const context = await getProductionMemberContext(userId, productionId);
+  if (!context || !context.isProductionMember || !context.productionMemberRole) {
+    return false;
+  }
+
+  return context.directorRoles.includes(context.productionMemberRole);
 }

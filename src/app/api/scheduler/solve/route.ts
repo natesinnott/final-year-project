@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { canAccessProductionScheduling } from "@/lib/scheduler-access";
+import { getAvailabilityCompleteness } from "@/lib/availability";
 
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -39,6 +40,20 @@ export async function POST(request: Request) {
   const canAccess = await canAccessProductionScheduling(userId, productionId);
   if (!canAccess) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const completeness = await getAvailabilityCompleteness(productionId);
+  if (!completeness.isComplete) {
+    return NextResponse.json(
+      {
+        error: "Availability is incomplete. Scheduling is blocked.",
+        missing_members: completeness.missingMembers,
+        total_members: completeness.totalMembers,
+        required_members: completeness.requiredMembers,
+        submitted_members: completeness.submittedMembers,
+      },
+      { status: 409 }
+    );
   }
 
   const config = getSchedulerConfig();
