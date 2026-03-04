@@ -85,6 +85,7 @@ export default async function HomePage({
   // Admins or director-roles can manage production settings.
   const canManageProduction =
     membership.role === "ADMIN" || directorRoles.includes(productionMembership.role);
+  const canAccessScheduling = directorRoles.includes(productionMembership.role);
   const canPostAnnouncement =
     membership.role === "ADMIN" || ANNOUNCEMENT_ROLES.has(productionMembership.role);
 
@@ -262,6 +263,14 @@ export default async function HomePage({
                   className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
                 >
                   Settings
+                </a>
+              ) : null}
+              {canAccessScheduling ? (
+                <a
+                  href={`/app/productions/${productionId}/schedule`}
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+                >
+                  Scheduling
                 </a>
               ) : null}
             </div>
