@@ -1,14 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import Link from "next/link";
 
 export default function LoginPage() {
-  useEffect(() => {
-    document.title = "StageSuite | Sign in";
-  }, []);
-
   const [isLoading, setIsLoading] = useState(false);
   const [ssoEmail, setSsoEmail] = useState("");
   const [ssoError, setSsoError] = useState<string | null>(null);
