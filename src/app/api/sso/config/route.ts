@@ -147,7 +147,7 @@ export async function GET(request: Request) {
         tenantId: organisation.ssoConfig.tenantId,
         enabled: organisation.ssoConfig.enabled,
       };
-    } catch (error) {
+    } catch {
       return NextResponse.json(
         { error: "SSO secret could not be decrypted." },
         { status: 500 }

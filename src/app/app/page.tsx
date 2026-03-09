@@ -1,10 +1,12 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAvailabilityCompleteness } from "@/lib/availability";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import SignOutButton from "../sign-out-button";
-import AnnouncementComposer from "./announcement-composer";
-import FileUploadCard from "./file-upload-card";
+import AnnouncementsPanel from "./announcements-panel";
+import FilesPanel from "./files-panel";
+import UpcomingRehearsalsPanel from "./upcoming-rehearsals-panel";
 import { isAppAdminEmail } from "@/lib/app-admin";
 
 export const metadata = {
@@ -39,7 +41,6 @@ export default async function HomePage({
 
   const userId = session.user?.id;
   const isAppAdmin = isAppAdminEmail(session.user?.email);
-  // Resolve the user's organisation membership (first org for now).
   const membership = userId
     ? await prisma.membership.findFirst({
         where: { userId },
@@ -52,7 +53,6 @@ export default async function HomePage({
   }
 
   const organisationId = membership.organisationId;
-  // Load all production memberships to populate the production picker.
   const productionMemberships = await prisma.productionMember.findMany({
     where: { userId, production: { organisationId } },
     include: { production: true },
@@ -70,7 +70,6 @@ export default async function HomePage({
   const selectedProductionId = Array.isArray(resolvedSearchParams?.productionId)
     ? resolvedSearchParams?.productionId[0]
     : resolvedSearchParams?.productionId;
-  // Select the production from query params or fall back to the first membership.
   const productionMembership =
     productionMemberships.find(
       (entry) => entry.productionId === selectedProductionId
@@ -82,7 +81,6 @@ export default async function HomePage({
     production.directorRoles.length > 0
       ? production.directorRoles
       : DEFAULT_DIRECTOR_ROLES;
-  // Admins or director-roles can manage production settings.
   const canManageProduction =
     membership.role === "ADMIN" || directorRoles.includes(productionMembership.role);
   const canAccessScheduling = directorRoles.includes(productionMembership.role);
@@ -101,14 +99,28 @@ export default async function HomePage({
               { visibleToRoles: { has: productionMembership.role } },
             ],
           },
+    include: {
+      createdBy: {
+        select: {
+          name: true,
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
-    take: 5,
+    take: 10,
   });
 
   const files = await prisma.fileAsset.findMany({
     where: { organisationId, productionId },
+    include: {
+      uploadedBy: {
+        select: {
+          name: true,
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
-    take: 5,
+    take: 15,
   });
 
   const visibleFiles =
@@ -120,21 +132,23 @@ export default async function HomePage({
             file.visibleToRoles.includes(productionMembership.role)
         );
 
-  // Placeholder data for the demo until scheduling is implemented.
   const upcomingRehearsals = [
     {
+      id: "sample-act-1-blocking",
       title: "Act 1 Blocking",
-      date: "Mon 7:00pm",
+      startsAt: "2026-03-05T19:00:00.000Z",
       location: "Studio A",
     },
     {
+      id: "sample-dance-call",
       title: "Dance Call",
-      date: "Wed 6:30pm",
+      startsAt: "2026-03-07T18:30:00.000Z",
       location: "Main Stage",
     },
     {
+      id: "sample-full-cast-run",
       title: "Full Cast Run",
-      date: "Sat 2:00pm",
+      startsAt: "2026-03-10T14:00:00.000Z",
       location: "Main Stage",
     },
   ];
@@ -173,15 +187,12 @@ export default async function HomePage({
     },
   ];
 
-  const tools = [
-    "Generate rehearsal schedule",
-    "Post announcement",
-    "Upload files",
-    "Track attendance",
-  ];
+  const availabilityCompleteness = canAccessScheduling
+    ? await getAvailabilityCompleteness(productionId)
+    : null;
 
   return (
-    <main className="min-h-dvh bg-slate-950 text-slate-100 p-6">
+    <main className="min-h-dvh bg-slate-950 p-6 text-slate-100">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm backdrop-blur">
           <div className="flex items-start justify-between gap-4">
@@ -230,9 +241,7 @@ export default async function HomePage({
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">
                 Current production
               </div>
-              <div className="text-sm font-semibold text-white">
-                {production.name}
-              </div>
+              <div className="text-sm font-semibold text-white">{production.name}</div>
               <div className="text-xs text-slate-300">
                 {production.venue ?? "Venue TBC"}
               </div>
@@ -289,215 +298,127 @@ export default async function HomePage({
               ) : null}
             </div>
           </div>
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-2 md:grid-cols-4">
             {productionSnapshot.map((item) => (
               <div
                 key={item.label}
-                className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4"
+                className="rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-2"
               >
-                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                   {item.label}
                 </div>
-                <div className="mt-2 text-sm font-medium text-white">
-                  {item.value}
-                </div>
+                <div className="mt-1 text-sm font-medium text-slate-100">{item.value}</div>
               </div>
             ))}
           </div>
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
-                Upcoming rehearsals
-              </h2>
-              <span className="text-xs text-slate-400">Static sample</span>
-            </div>
-            <div className="mt-4 grid gap-4">
-              {upcomingRehearsals.map((rehearsal) => (
-                <div
-                  key={rehearsal.title}
-                  className="flex items-center justify-between rounded-xl border border-slate-800/70 bg-slate-950/40 p-4"
-                >
-                  <div>
-                    <div className="font-medium text-white">
-                      {rehearsal.title}
-                    </div>
-                    <div className="text-sm text-slate-400">
-                      {rehearsal.location}
-                    </div>
-                  </div>
-                  <div className="text-sm font-medium text-slate-200">
-                    {rehearsal.date}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        <section className="grid gap-6 lg:grid-cols-[1.45fr_1fr]">
+          <div className="grid gap-6">
+            <UpcomingRehearsalsPanel
+              productionId={productionId}
+              rehearsals={upcomingRehearsals}
+            />
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
-                Your tasks
-              </h2>
-              <span className="text-xs text-slate-400">Static sample</span>
-            </div>
-            <div className="mt-4 grid gap-3">
-              {tasks.map((task) => (
-                <div
-                  key={task.title}
-                  className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4"
-                >
-                  <div className="font-medium text-white">{task.title}</div>
-                  <div className="text-xs text-slate-400">{task.due}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
-                Announcements
-              </h2>
-              <span className="text-xs text-slate-400">Live data</span>
-            </div>
-            <AnnouncementComposer
+            <AnnouncementsPanel
               organisationId={organisationId}
               productionId={productionId}
               productionRoles={PRODUCTION_ROLES}
               canPost={canPostAnnouncement}
+              announcements={announcements.map((announcement) => ({
+                id: announcement.id,
+                title: announcement.title,
+                body: announcement.body,
+                createdAt: announcement.createdAt.toISOString(),
+                createdByName: announcement.createdBy.name,
+              }))}
             />
-            <div className="mt-4 grid gap-4">
-              {announcements.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-800 p-6 text-sm text-slate-400">
-                  No announcements yet. When directors or stage managers post
-                  updates, they will appear here.
-                </div>
-              ) : (
-                announcements.map((announcement) => (
-                  <div
-                    key={announcement.id}
-                    className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4"
-                  >
-                    <div className="font-medium text-white">
-                      {announcement.title}
-                    </div>
-                    <div className="mt-2 text-sm text-slate-300">
-                      {announcement.body}
-                    </div>
-                    <div className="mt-2 text-xs text-slate-500">
-                      {announcement.createdAt.toLocaleString()}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">Files</h2>
-              <span className="text-xs text-slate-400">Live data</span>
-            </div>
-            <FileUploadCard
+          <div className="grid gap-6">
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-white">Your tasks</h2>
+                <span className="text-xs text-slate-400">Static sample</span>
+              </div>
+              <div className="mt-4 grid gap-3">
+                {tasks.map((task) => (
+                  <div
+                    key={task.title}
+                    className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4"
+                  >
+                    <div className="font-medium text-white">{task.title}</div>
+                    <div className="text-xs text-slate-400">{task.due}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <FilesPanel
               organisationId={organisationId}
               productionId={productionId}
               productionRoles={PRODUCTION_ROLES}
+              canUpload
+              files={visibleFiles.map((file) => ({
+                id: file.id,
+                originalName: file.originalName,
+                size: file.size,
+                mimeType: file.mimeType,
+                createdAt: file.createdAt.toISOString(),
+                uploadedByName: file.uploadedBy.name,
+              }))}
             />
-            <div className="mt-4 grid gap-4">
-              {visibleFiles.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-800 p-6 text-sm text-slate-400">
-                  No files uploaded yet. Choreography, music, and blocking files
-                  will show up here.
-                </div>
-              ) : (
-                visibleFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-800/70 bg-slate-950/40 p-4"
-                  >
-                    <div>
-                      <div className="font-medium text-white">
-                        {file.originalName}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {Math.round(file.size / 1024)} KB · {file.mimeType}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-xs text-slate-500">
-                        {file.createdAt.toLocaleDateString()}
-                      </div>
-                      <a
-                        href={`/api/files/download?id=${file.id}`}
-                        className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:border-slate-500"
-                      >
-                        Download
-                      </a>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[1fr_2fr]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-white">Quick tools</h2>
-            <div className="mt-4 grid gap-3">
-              {tools.map((tool) => (
-                <div
-                  key={tool}
-                  className="rounded-xl border border-slate-800/70 bg-slate-950/40 px-4 py-3 text-sm text-slate-200"
-                >
-                  {tool}
-                </div>
-              ))}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-white">Availability snapshot</h2>
+            <span className="text-xs text-slate-400">Static sample</span>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Cast</div>
+              <div className="mt-1 text-xl font-semibold text-white">18</div>
+              <div className="text-xs text-slate-400">confirmed this week</div>
+            </div>
+            <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Crew</div>
+              <div className="mt-1 text-xl font-semibold text-white">7</div>
+              <div className="text-xs text-slate-400">pending responses</div>
+            </div>
+            <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Absences</div>
+              <div className="mt-1 text-xl font-semibold text-white">2</div>
+              <div className="text-xs text-slate-400">reported this week</div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">
-                Availability snapshot
-              </h2>
-              <span className="text-xs text-slate-400">Static sample</span>
+          {availabilityCompleteness ? (
+            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950/30 px-4 py-3 text-sm text-slate-300">
+              {availabilityCompleteness.missingMembers.length > 0 ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span>
+                    {availabilityCompleteness.missingMembers.length} people haven&apos;t submitted
+                    availability.
+                  </span>
+                  <a
+                    href={`/app/productions/${productionId}/availability/team`}
+                    className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-slate-400"
+                  >
+                    Open Team Availability
+                  </a>
+                </div>
+              ) : (
+                <span>All required members have submitted availability.</span>
+              )}
             </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
-              <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                  Cast
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
-                  18
-                </div>
-                <div className="text-xs text-slate-400">confirmed this week</div>
-              </div>
-              <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                  Crew
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
-                  7
-                </div>
-                <div className="text-xs text-slate-400">pending responses</div>
-              </div>
-              <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                  Absences
-                </div>
-                <div className="mt-2 text-2xl font-semibold text-white">
-                  2
-                </div>
-                <div className="text-xs text-slate-400">reported this week</div>
-              </div>
+          ) : (
+            <div className="mt-4 text-xs text-slate-500">
+              {/* TODO: Replace with live missing-availability callout for non-director roles if needed. */}
+              Missing-submission callout is shown for scheduling roles.
             </div>
-          </div>
+          )}
         </section>
       </div>
     </main>
