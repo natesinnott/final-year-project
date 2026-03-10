@@ -8,6 +8,10 @@ import AnnouncementsPanel from "./announcements-panel";
 import FilesPanel from "./files-panel";
 import UpcomingRehearsalsPanel from "./upcoming-rehearsals-panel";
 import { isAppAdminEmail } from "@/lib/app-admin";
+import {
+  countVisibleRehearsalsThisWeek,
+  getVisibleUpcomingRehearsals,
+} from "@/lib/rehearsals";
 
 export const metadata = {
   title: "StageSuite | Dashboard",
@@ -40,13 +44,15 @@ export default async function HomePage({
   }
 
   const userId = session.user?.id;
+  if (!userId) {
+    redirect("/login");
+  }
+
   const isAppAdmin = isAppAdminEmail(session.user?.email);
-  const membership = userId
-    ? await prisma.membership.findFirst({
-        where: { userId },
-        include: { organisation: true },
-      })
-    : null;
+  const membership = await prisma.membership.findFirst({
+    where: { userId },
+    include: { organisation: true },
+  });
 
   if (!membership) {
     redirect("/app/onboarding");
@@ -132,26 +138,19 @@ export default async function HomePage({
             file.visibleToRoles.includes(productionMembership.role)
         );
 
-  const upcomingRehearsals = [
-    {
-      id: "sample-act-1-blocking",
-      title: "Act 1 Blocking",
-      startsAt: "2026-03-05T19:00:00.000Z",
-      location: "Studio A",
-    },
-    {
-      id: "sample-dance-call",
-      title: "Dance Call",
-      startsAt: "2026-03-07T18:30:00.000Z",
-      location: "Main Stage",
-    },
-    {
-      id: "sample-full-cast-run",
-      title: "Full Cast Run",
-      startsAt: "2026-03-10T14:00:00.000Z",
-      location: "Main Stage",
-    },
-  ];
+  const [upcomingRehearsals, rehearsalsThisWeek] = await Promise.all([
+    getVisibleUpcomingRehearsals({
+      productionId,
+      userId,
+      canViewAll: canAccessScheduling,
+      limit: 5,
+    }),
+    countVisibleRehearsalsThisWeek({
+      productionId,
+      userId,
+      canViewAll: canAccessScheduling,
+    }),
+  ]);
 
   const tasks = [
     {
@@ -179,7 +178,7 @@ export default async function HomePage({
     },
     {
       label: "Rehearsals this week",
-      value: "4 scheduled",
+      value: `${rehearsalsThisWeek} scheduled`,
     },
     {
       label: "Attendance flagged",
@@ -280,6 +279,12 @@ export default async function HomePage({
               >
                 Availability
               </a>
+              <a
+                href={`/app/productions/${productionId}/rehearsals`}
+                className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+              >
+                Rehearsals
+              </a>
               {canAccessScheduling ? (
                 <a
                   href={`/app/productions/${productionId}/availability/team`}
@@ -317,7 +322,12 @@ export default async function HomePage({
           <div className="grid gap-6">
             <UpcomingRehearsalsPanel
               productionId={productionId}
-              rehearsals={upcomingRehearsals}
+              rehearsals={upcomingRehearsals.map((rehearsal) => ({
+                id: rehearsal.id,
+                title: rehearsal.title,
+                startsAt: rehearsal.start.toISOString(),
+                location: production.venue ?? "Default room",
+              }))}
             />
 
             <AnnouncementsPanel

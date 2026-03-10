@@ -1,71 +1,105 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-type AvailabilityWindowRow = {
-  id: string;
-  start: string;
-  end: string;
-  kind: "AVAILABLE" | "UNAVAILABLE";
-};
+import WeeklyAvailabilityGrid from "./weekly-availability-grid";
+import {
+  CURATED_TIME_ZONES,
+  addWeeks,
+  detectSystemTimeZone,
+  getWeekStartForInstant,
+  isValidTimeZone,
+  localDateKey,
+  localRangeToUtc,
+  zonedToUtc,
+  type AvailabilityKind,
+  type LocalDate,
+  type LocalWallClock,
+  type UtcWindow,
+} from "@/lib/availabilityTime";
 
 type AvailabilityClientProps = {
   productionId: string;
 };
 
-type FormState = {
-  start: string;
-  end: string;
-  kind: "AVAILABLE" | "UNAVAILABLE";
-};
+const TIMEZONE_STORAGE_KEY = "stagesuite.timezone";
 
-const DEFAULT_FORM: FormState = {
-  start: "",
-  end: "",
-  kind: "AVAILABLE",
-};
-
-function toLocalInputValue(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const pad = (value: number) => value.toString().padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+function normalizeWindowsUtc(windows: UtcWindow[]) {
+  return [...windows].sort((a, b) => a.start.localeCompare(b.start));
 }
 
-function toIsoFromInput(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
+function parseApiWindows(payload: unknown): UtcWindow[] {
+  if (!payload || typeof payload !== "object") {
+    return [];
   }
-  return date.toISOString();
-}
 
-function prettyDate(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
+  const maybeWindows = (payload as { windows?: unknown }).windows;
+  if (!Array.isArray(maybeWindows)) {
+    return [];
   }
-  return `${date.toLocaleString()} (UTC: ${iso})`;
+
+  return maybeWindows
+    .map((window) => {
+      if (!window || typeof window !== "object") {
+        return null;
+      }
+
+      const row = window as { id?: unknown; start?: unknown; end?: unknown; kind?: unknown };
+
+      if (
+        typeof row.id !== "string" ||
+        typeof row.start !== "string" ||
+        typeof row.end !== "string" ||
+        (row.kind !== "AVAILABLE" && row.kind !== "UNAVAILABLE")
+      ) {
+        return null;
+      }
+
+      return {
+        id: row.id,
+        start: row.start,
+        end: row.end,
+        kind: row.kind,
+      } as UtcWindow;
+    })
+    .filter((window): window is UtcWindow => window !== null);
 }
 
 export default function AvailabilityClient({ productionId }: AvailabilityClientProps) {
-  const [windows, setWindows] = useState<AvailabilityWindowRow[]>([]);
+  const [windows, setWindows] = useState<UtcWindow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingWindowId, setEditingWindowId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(DEFAULT_FORM);
+  const detectedTimeZone = useMemo(() => detectSystemTimeZone(), []);
+  const [displayTimeZone, setDisplayTimeZone] = useState<string>("UTC");
+  const [timeZoneReady, setTimeZoneReady] = useState(false);
+  const [tzSavedAt, setTzSavedAt] = useState<number | null>(null);
 
-  const editingWindow = useMemo(
-    () => windows.find((window) => window.id === editingWindowId) ?? null,
-    [windows, editingWindowId]
+  const [paintKind, setPaintKind] = useState<AvailabilityKind>("AVAILABLE");
+  const [weekAnchorUtc, setWeekAnchorUtc] = useState<string>(() => new Date().toISOString());
+  const weekStart: LocalDate = useMemo(
+    () => getWeekStartForInstant(weekAnchorUtc, displayTimeZone),
+    [displayTimeZone, weekAnchorUtc]
   );
+
+  useEffect(() => {
+    const fromStorage = typeof window !== "undefined" ? window.localStorage.getItem(TIMEZONE_STORAGE_KEY) : null;
+    const candidate = fromStorage && isValidTimeZone(fromStorage) ? fromStorage : detectedTimeZone;
+
+    setDisplayTimeZone(candidate);
+    setWeekAnchorUtc(new Date().toISOString());
+    setTimeZoneReady(true);
+  }, [detectedTimeZone]);
+
+  useEffect(() => {
+    if (!timeZoneReady || typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(TIMEZONE_STORAGE_KEY, displayTimeZone);
+    setTzSavedAt(Date.now());
+  }, [displayTimeZone, timeZoneReady]);
 
   const loadWindows = useCallback(async () => {
     setIsLoading(true);
@@ -76,16 +110,14 @@ export default function AvailabilityClient({ productionId }: AvailabilityClientP
         `/api/productions/${encodeURIComponent(productionId)}/availability/me`,
         { cache: "no-store" }
       );
-      const payload = (await response.json()) as {
-        error?: string;
-        windows?: AvailabilityWindowRow[];
-      };
+
+      const payload = (await response.json()) as { error?: string; windows?: unknown };
 
       if (!response.ok) {
         throw new Error(payload.error ?? "Unable to load availability.");
       }
 
-      setWindows(payload.windows ?? []);
+      setWindows(normalizeWindowsUtc(parseApiWindows(payload)));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Request failed.");
     } finally {
@@ -97,186 +129,231 @@ export default function AvailabilityClient({ productionId }: AvailabilityClientP
     loadWindows();
   }, [loadWindows]);
 
-  function openCreateModal() {
-    setEditingWindowId(null);
-    setForm(DEFAULT_FORM);
-    setError(null);
-    setMessage(null);
-    setIsModalOpen(true);
-  }
+  const persistWindow = useCallback(
+    async (startLocal: LocalWallClock, endLocal: LocalWallClock) => {
+      setError(null);
+      setMessage(null);
 
-  function openEditModal(window: AvailabilityWindowRow) {
-    setEditingWindowId(window.id);
-    setForm({
-      start: toLocalInputValue(window.start),
-      end: toLocalInputValue(window.end),
-      kind: window.kind,
-    });
-    setError(null);
-    setMessage(null);
-    setIsModalOpen(true);
-  }
+      const converted = localRangeToUtc(startLocal, endLocal, displayTimeZone);
 
-  function closeModal() {
-    setIsModalOpen(false);
-    setEditingWindowId(null);
-    setForm(DEFAULT_FORM);
-  }
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsSaving(true);
-    setError(null);
-    setMessage(null);
-
-    try {
-      const startIso = toIsoFromInput(form.start);
-      const endIso = toIsoFromInput(form.end);
-
-      if (!startIso || !endIso) {
-        throw new Error("Start and end must be valid dates.");
-      }
-
-      const endpoint = editingWindowId
-        ? `/api/productions/${encodeURIComponent(productionId)}/availability/me/${encodeURIComponent(editingWindowId)}`
-        : `/api/productions/${encodeURIComponent(productionId)}/availability/me`;
-
-      const method = editingWindowId ? "PUT" : "POST";
-
-      const response = await fetch(endpoint, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          start: startIso,
-          end: endIso,
-          kind: form.kind,
-        }),
-      });
-
-      const payload = (await response.json()) as AvailabilityWindowRow & {
-        error?: string;
-      };
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Unable to save availability window.");
-      }
-
-      if (editingWindowId) {
-        setWindows((prev) =>
-          prev.map((window) => (window.id === payload.id ? payload : window))
+      if (!converted) {
+        setError(
+          "That painted range includes a non-existent DST local slot or has invalid bounds. Try another time range."
         );
-        setMessage("Availability window updated.");
-      } else {
-        setWindows((prev) =>
-          [...prev, payload].sort((a, b) => a.start.localeCompare(b.start))
-        );
-        setMessage("Availability window added.");
+        return;
       }
 
-      closeModal();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Request failed.");
-    } finally {
-      setIsSaving(false);
-    }
-  }
+      setIsSaving(true);
+      try {
+        const response = await fetch(
+          `/api/productions/${encodeURIComponent(productionId)}/availability/me`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              start: converted.startUtcIso,
+              end: converted.endUtcIso,
+              kind: paintKind,
+            }),
+          }
+        );
 
-  async function handleDelete(windowId: string) {
-    setIsSaving(true);
-    setError(null);
-    setMessage(null);
+        const payload = (await response.json()) as UtcWindow & { error?: string };
 
-    try {
-      const response = await fetch(
-        `/api/productions/${encodeURIComponent(productionId)}/availability/me/${encodeURIComponent(windowId)}`,
-        {
-          method: "DELETE",
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to save availability window.");
         }
-      );
 
-      const payload = (await response.json()) as { error?: string };
+        setWindows((previous) =>
+          normalizeWindowsUtc([
+            ...previous,
+            {
+              id: payload.id,
+              start: payload.start,
+              end: payload.end,
+              kind: payload.kind,
+            },
+          ])
+        );
 
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Unable to delete availability window.");
+        setMessage("Availability window saved.");
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : "Request failed.");
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [displayTimeZone, paintKind, productionId]
+  );
+
+  const deleteWindow = useCallback(
+    async (windowId: string) => {
+      if (isSaving) {
+        return;
       }
 
-      setWindows((prev) => prev.filter((window) => window.id !== windowId));
-      setMessage("Availability window deleted.");
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Request failed.");
-    } finally {
-      setIsSaving(false);
-    }
-  }
+      setIsSaving(true);
+      setError(null);
+      setMessage(null);
+
+      try {
+        const response = await fetch(
+          `/api/productions/${encodeURIComponent(productionId)}/availability/me/${encodeURIComponent(windowId)}`,
+          {
+            method: "DELETE",
+          }
+        );
+
+        const payload = (await response.json()) as { error?: string };
+
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to delete availability window.");
+        }
+
+        setWindows((previous) => previous.filter((window) => window.id !== windowId));
+        setMessage("Availability window deleted.");
+      } catch (deleteError) {
+        setError(deleteError instanceof Error ? deleteError.message : "Request failed.");
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [isSaving, productionId]
+  );
+
+  const timezoneOptions = useMemo(() => {
+    const base = [detectedTimeZone, "UTC", "America/New_York", ...CURATED_TIME_ZONES];
+    return Array.from(new Set(base));
+  }, [detectedTimeZone]);
+
+  const setWeekFromLocalStart = useCallback(
+    (local: LocalDate) => {
+      const utc = zonedToUtc(
+        { year: local.year, month: local.month, day: local.day, hour: 0, minute: 0 },
+        displayTimeZone,
+        { rejectNonexistent: false }
+      );
+      if (utc) {
+        setWeekAnchorUtc(utc.toISOString());
+      }
+    },
+    [displayTimeZone]
+  );
+
+  const saveBadgeVisible = tzSavedAt !== null && Date.now() - tzSavedAt < 2500;
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-            Your windows
+            Your weekly availability
           </p>
-          <h2 className="mt-2 text-lg font-semibold text-white">
-            Manage your availability
-          </h2>
+          <h2 className="mt-2 text-lg font-semibold text-white">Manage your availability</h2>
           <p className="mt-2 text-sm text-slate-300">
-            Add available/unavailable windows. Overlapping windows are rejected.
+            Displayed in <span className="font-semibold text-slate-100">{displayTimeZone}</span>. Saved in UTC.
           </p>
         </div>
-        <button
-          className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
-          onClick={openCreateModal}
-          disabled={isLoading || isSaving}
-        >
-          Add window
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400" htmlFor="availability-timezone">
+            Time zone
+          </label>
+          <select
+            id="availability-timezone"
+            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+            value={displayTimeZone}
+            onChange={(event) => {
+              const nextTz = event.target.value;
+              setDisplayTimeZone(nextTz);
+              setWeekAnchorUtc(new Date().toISOString());
+            }}
+          >
+            <option value={detectedTimeZone}>Local (Detected) · {detectedTimeZone}</option>
+            {timezoneOptions.map((timezone) => (
+              <option key={timezone} value={timezone}>
+                {timezone}
+              </option>
+            ))}
+          </select>
+          <span
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 text-xs text-slate-300"
+            title="Your selected timezone is used for viewing and editing the weekly grid. Availability is always stored and sent to the API in UTC."
+          >
+            ?
+          </span>
+          {saveBadgeVisible ? (
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-200">
+              Saved
+            </span>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-xl border border-slate-800">
-        <div className="grid grid-cols-[1.4fr_1.4fr_0.8fr_0.8fr] gap-3 border-b border-slate-800 bg-slate-950/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-          <div>Start</div>
-          <div>End</div>
-          <div>Kind</div>
-          <div>Actions</div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+            onClick={() => setWeekFromLocalStart(addWeeks(weekStart, -1))}
+            disabled={isSaving}
+          >
+            Prev
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+            onClick={() => setWeekAnchorUtc(new Date().toISOString())}
+            disabled={isSaving}
+          >
+            This week
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+            onClick={() => setWeekFromLocalStart(addWeeks(weekStart, 1))}
+            disabled={isSaving}
+          >
+            Next
+          </button>
         </div>
 
-        {isLoading ? (
-          <div className="px-4 py-3 text-sm text-slate-300">Loading availability...</div>
-        ) : windows.length === 0 ? (
-          <div className="px-4 py-3 text-sm text-slate-300">
-            No windows submitted yet.
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Paint as</span>
+          <select
+            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+            value={paintKind}
+            onChange={(event) => setPaintKind(event.target.value as AvailabilityKind)}
+            disabled={isSaving}
+          >
+            <option value="AVAILABLE">AVAILABLE</option>
+            <option value="UNAVAILABLE">UNAVAILABLE</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        {isLoading || !timeZoneReady ? (
+          <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
+            Loading availability...
           </div>
         ) : (
-          windows.map((window) => (
-            <div
-              key={window.id}
-              className="grid grid-cols-[1.4fr_1.4fr_0.8fr_0.8fr] gap-3 border-b border-slate-800 px-4 py-3 text-sm text-slate-200"
-            >
-              <div>{prettyDate(window.start)}</div>
-              <div>{prettyDate(window.end)}</div>
-              <div>{window.kind}</div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:border-slate-500 disabled:opacity-60"
-                  onClick={() => openEditModal(window)}
-                  disabled={isSaving}
-                >
-                  Edit
-                </button>
-                <button
-                  className="rounded-lg border border-rose-500/60 px-3 py-1 text-xs text-rose-200 hover:border-rose-400 disabled:opacity-60"
-                  onClick={() => handleDelete(window.id)}
-                  disabled={isSaving}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
+          <WeeklyAvailabilityGrid
+            windows={windows}
+            weekStart={weekStart}
+            displayTimeZone={displayTimeZone}
+            isBusy={isSaving}
+            onPaintRange={persistWindow}
+            onDeleteWindow={deleteWindow}
+          />
         )}
       </div>
+
+      <p className="mt-3 text-xs text-slate-400">
+        Week key: {localDateKey(weekStart)} ({displayTimeZone})
+      </p>
 
       {message ? (
         <div className="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
@@ -287,82 +364,6 @@ export default function AvailabilityClient({ productionId }: AvailabilityClientP
       {error ? (
         <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
           {error}
-        </div>
-      ) : null}
-
-      {isModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-          <form
-            className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-xl"
-            onSubmit={handleSubmit}
-          >
-            <h3 className="text-lg font-semibold text-white">
-              {editingWindow ? "Edit availability window" : "Add availability window"}
-            </h3>
-
-            <div className="mt-4 grid gap-4">
-              <label className="grid gap-2 text-sm text-slate-300">
-                Start
-                <input
-                  type="datetime-local"
-                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200"
-                  value={form.start}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, start: event.target.value }))
-                  }
-                  required
-                />
-              </label>
-
-              <label className="grid gap-2 text-sm text-slate-300">
-                End
-                <input
-                  type="datetime-local"
-                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200"
-                  value={form.end}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, end: event.target.value }))
-                  }
-                  required
-                />
-              </label>
-
-              <label className="grid gap-2 text-sm text-slate-300">
-                Kind
-                <select
-                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200"
-                  value={form.kind}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      kind: event.target.value as "AVAILABLE" | "UNAVAILABLE",
-                    }))
-                  }
-                >
-                  <option value="AVAILABLE">AVAILABLE</option>
-                  <option value="UNAVAILABLE">UNAVAILABLE</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
-                onClick={closeModal}
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
-                disabled={isSaving}
-              >
-                {isSaving ? "Saving..." : editingWindow ? "Update" : "Create"}
-              </button>
-            </div>
-          </form>
         </div>
       ) : null}
     </section>

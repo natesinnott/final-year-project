@@ -55,7 +55,7 @@ export default async function ProductionAvailabilityPage({
                 {production.name}
               </h1>
               <p className="mt-2 text-sm text-slate-300">
-                Submit and maintain your own availability windows in UTC.
+                View and edit your availability in your selected time zone. Saved in UTC.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">

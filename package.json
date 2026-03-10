@@ -7,6 +7,7 @@
     "build": "next build --webpack",
     "start": "node server.js",
     "lint": "eslint",
+    "test:availability-time": "node --test --experimental-strip-types src/lib/availabilityTime.test.ts",
     "auth:generate": "dotenv -e .env -- npx @better-auth/cli generate"
   },
   "engines": {

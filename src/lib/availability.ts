@@ -7,6 +7,21 @@ type MissingMember = {
   role: string;
 };
 
+export type TeamAvailabilityWindow = {
+  id: string;
+  start: string;
+  end: string;
+  kind: AvailabilityKind;
+};
+
+export type TeamAvailabilityMember = {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  windows: TeamAvailabilityWindow[];
+};
+
 export type AvailabilityCompleteness = {
   isComplete: boolean;
   totalMembers: number;
@@ -149,5 +164,62 @@ export async function getAvailabilityCompleteness(
     requiredMembers: requiredMembers.length,
     submittedMembers: requiredMembers.length - missingMembers.length,
     missingMembers,
+  };
+}
+
+export async function getTeamAvailabilitySnapshot(productionId: string): Promise<{
+  members: TeamAvailabilityMember[];
+  completeness: AvailabilityCompleteness;
+}> {
+  const [members, windows, completeness] = await Promise.all([
+    prisma.productionMember.findMany({
+      where: { productionId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    }),
+    prisma.availabilityWindow.findMany({
+      where: { productionId },
+      orderBy: [{ userId: "asc" }, { start: "asc" }],
+    }),
+    getAvailabilityCompleteness(productionId),
+  ]);
+
+  const windowsByUser = new Map<string, TeamAvailabilityWindow[]>();
+
+  for (const window of windows) {
+    const serializedWindow = {
+      id: window.id,
+      start: window.start.toISOString(),
+      end: window.end.toISOString(),
+      kind: window.kind,
+    };
+    const existing = windowsByUser.get(window.userId);
+
+    if (existing) {
+      existing.push(serializedWindow);
+    } else {
+      windowsByUser.set(window.userId, [serializedWindow]);
+    }
+  }
+
+  return {
+    members: members.map((member) => ({
+      userId: member.userId,
+      name: member.user.name,
+      email: member.user.email,
+      role: member.role,
+      windows: windowsByUser.get(member.userId) ?? [],
+    })),
+    completeness,
   };
 }

@@ -1,62 +1,13 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canAccessProductionScheduling } from "@/lib/scheduler-access";
+import { getTeamAvailabilitySnapshot } from "@/lib/availability";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import ScheduleClient from "./schedule-client";
 
 export const metadata = {
   title: "StageSuite | Scheduling",
-};
-
-const DEFAULT_DIRECTOR_ROLES = ["DIRECTOR"];
-
-const EXAMPLE_PAYLOAD = {
-  horizon_start: "2026-03-01T08:00:00Z",
-  horizon_end: "2026-03-01T18:00:00Z",
-  time_granularity_minutes: 15,
-  blocks: [
-    {
-      id: "block-001",
-      duration_minutes: 60,
-      required_people_ids: ["person-a"],
-      allowed_room_ids: ["room-1", "room-2"],
-    },
-    {
-      id: "block-002",
-      duration_minutes: 30,
-      required_people_ids: ["person-a", "person-b"],
-      fixed_room_id: "room-2",
-    },
-  ],
-  people: [
-    {
-      id: "person-a",
-      availability_windows: [
-        { start: "2026-03-01T08:00:00Z", end: "2026-03-01T12:00:00Z" },
-        { start: "2026-03-01T13:00:00Z", end: "2026-03-01T18:00:00Z" },
-      ],
-    },
-    {
-      id: "person-b",
-      availability_windows: [
-        { start: "2026-03-01T10:00:00Z", end: "2026-03-01T16:00:00Z" },
-      ],
-    },
-  ],
-  rooms: [
-    {
-      id: "room-1",
-      availability_windows: [
-        { start: "2026-03-01T08:00:00Z", end: "2026-03-01T18:00:00Z" },
-      ],
-    },
-    {
-      id: "room-2",
-      availability_windows: [
-        { start: "2026-03-01T09:00:00Z", end: "2026-03-01T17:00:00Z" },
-      ],
-    },
-  ],
 };
 
 export default async function ProductionSchedulePage({
@@ -83,7 +34,8 @@ export default async function ProductionSchedulePage({
     select: {
       id: true,
       name: true,
-      directorRoles: true,
+      rehearsalStart: true,
+      rehearsalEnd: true,
     },
   });
 
@@ -91,30 +43,12 @@ export default async function ProductionSchedulePage({
     redirect("/app/productions");
   }
 
-  const productionMember = await prisma.productionMember.findUnique({
-    where: {
-      productionId_userId: {
-        productionId: production.id,
-        userId,
-      },
-    },
-    select: {
-      role: true,
-    },
-  });
-
-  if (!productionMember) {
-    redirect("/app/productions");
-  }
-
-  const directorRoles =
-    production.directorRoles.length > 0
-      ? production.directorRoles
-      : DEFAULT_DIRECTOR_ROLES;
-
-  if (!directorRoles.includes(productionMember.role)) {
+  const canAccess = await canAccessProductionScheduling(userId, production.id);
+  if (!canAccess) {
     redirect(`/app?productionId=${production.id}`);
   }
+
+  const teamSnapshot = await getTeamAvailabilitySnapshot(production.id);
 
   return (
     <main className="min-h-dvh bg-slate-950 text-slate-100 p-6">
@@ -129,7 +63,7 @@ export default async function ProductionSchedulePage({
                 {production.name}
               </h1>
               <p className="mt-2 text-sm text-slate-300">
-                Run the solver and review generated block placements.
+                Build rehearsal blocks, run the solver, and publish the committed schedule.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -152,6 +86,12 @@ export default async function ProductionSchedulePage({
                 Team availability
               </a>
               <a
+                href={`/app/productions/${production.id}/rehearsals`}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
+              >
+                Published rehearsals
+              </a>
+              <a
                 href={`/app/productions/${production.id}/settings`}
                 className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
               >
@@ -163,7 +103,20 @@ export default async function ProductionSchedulePage({
 
         <ScheduleClient
           productionId={production.id}
-          examplePayload={JSON.stringify(EXAMPLE_PAYLOAD, null, 2)}
+          initialHorizonStart={
+            production.rehearsalStart ? production.rehearsalStart.toISOString() : null
+          }
+          initialHorizonEnd={
+            production.rehearsalEnd ? production.rehearsalEnd.toISOString() : null
+          }
+          initialMembers={teamSnapshot.members}
+          initialCompleteness={{
+            is_complete: teamSnapshot.completeness.isComplete,
+            total_members: teamSnapshot.completeness.totalMembers,
+            required_members: teamSnapshot.completeness.requiredMembers,
+            submitted_members: teamSnapshot.completeness.submittedMembers,
+            missing_members: teamSnapshot.completeness.missingMembers,
+          }}
         />
       </div>
     </main>

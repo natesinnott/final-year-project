@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { canAccessProductionScheduling } from "@/lib/scheduler-access";
 import { getAvailabilityCompleteness } from "@/lib/availability";
+import { validateSolverPrecedences, type SolverPrecedence } from "@/lib/scheduling";
 
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -69,6 +70,32 @@ export async function POST(request: Request) {
     payload = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  if (payload && typeof payload === "object") {
+    const candidate = payload as {
+      blocks?: Array<{ id?: unknown }>;
+      precedences?: SolverPrecedence[];
+    };
+
+    if (Array.isArray(candidate.precedences)) {
+      const blockIds = Array.isArray(candidate.blocks)
+        ? candidate.blocks
+            .map((block) => (typeof block?.id === "string" ? block.id : null))
+            .filter((id): id is string => Boolean(id))
+        : [];
+      const precedenceErrors = validateSolverPrecedences({
+        blockIds,
+        precedences: candidate.precedences,
+      });
+
+      if (precedenceErrors.length > 0) {
+        return NextResponse.json(
+          { error: precedenceErrors.join(" ") },
+          { status: 400 }
+        );
+      }
+    }
   }
 
   const controller = new AbortController();
