@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAvailabilityCompleteness } from "@/lib/availability";
+import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import SignOutButton from "../sign-out-button";
@@ -224,12 +225,12 @@ export default async function HomePage({
                   >
                     Org Settings
                   </a>
-                  <a
+                  <Link
                     href="/app/productions/new"
                     className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-slate-950"
                   >
                     Create Production
-                  </a>
+                  </Link>
                 </>
               ) : null}
               <SignOutButton />
