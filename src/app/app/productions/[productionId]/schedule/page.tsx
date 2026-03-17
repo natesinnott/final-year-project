@@ -36,6 +36,7 @@ export default async function ProductionSchedulePage({
       name: true,
       rehearsalStart: true,
       rehearsalEnd: true,
+      timeZone: true,
     },
   });
 
@@ -109,6 +110,7 @@ export default async function ProductionSchedulePage({
           initialHorizonEnd={
             production.rehearsalEnd ? production.rehearsalEnd.toISOString() : null
           }
+          initialTimeZone={production.timeZone}
           initialMembers={teamSnapshot.members}
           initialCompleteness={{
             is_complete: teamSnapshot.completeness.isComplete,
