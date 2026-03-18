@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isValidTimeZone } from "@/lib/availabilityTime";
 import { canAccessProductionScheduling } from "@/lib/scheduler-access";
 import { publishProductionRehearsals } from "@/lib/rehearsals";
 
@@ -24,6 +25,7 @@ type PublishPlacement = {
 type PublishRehearsalsPayload = {
   horizon_start?: string;
   horizon_end?: string;
+  time_zone?: string;
   solve_run_id?: string | null;
   solver_status?: string;
   blocks?: PublishBlock[];
@@ -64,10 +66,18 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
   const horizonStart = parseIsoDate(payload.horizon_start);
   const horizonEnd = parseIsoDate(payload.horizon_end);
+  const timeZone = payload.time_zone?.trim();
 
   if (!horizonStart || !horizonEnd || horizonEnd <= horizonStart) {
     return NextResponse.json(
       { error: "Invalid publish horizon." },
+      { status: 400 }
+    );
+  }
+
+  if (!timeZone || !isValidTimeZone(timeZone)) {
+    return NextResponse.json(
+      { error: "Choose a valid scheduling time zone before publishing." },
       { status: 400 }
     );
   }
@@ -182,21 +192,35 @@ export async function POST(request: Request, { params }: RouteParams) {
     });
   }
 
-  const created = await publishProductionRehearsals({
-    productionId,
-    createdById: userId,
-    solveRunId: payload.solve_run_id ?? null,
-    sourceMetadata: {
-      solverStatus: payload.solver_status,
-      source: "schedule-page",
-    },
-    horizonStart,
-    horizonEnd,
-    rehearsals: rehearsalsToCreate,
-  });
+  let created;
+  try {
+    created = await publishProductionRehearsals({
+      productionId,
+      createdById: userId,
+      timeZone,
+      solveRunId: payload.solve_run_id ?? null,
+      sourceMetadata: {
+        solverStatus: payload.solver_status,
+        source: "schedule-page",
+        timeZone,
+      },
+      horizonStart,
+      horizonEnd,
+      rehearsals: rehearsalsToCreate,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Unable to publish rehearsals.",
+      },
+      { status: 409 }
+    );
+  }
 
   return NextResponse.json({
     created_count: created.length,
+    time_zone: timeZone,
     rehearsals: created.map((rehearsal) => ({
       id: rehearsal.id,
       title: rehearsal.title,

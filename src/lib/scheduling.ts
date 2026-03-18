@@ -1,4 +1,5 @@
 import type { TeamAvailabilityMember } from "@/lib/availability";
+import { parseLocalDateTimeInput, zonedToUtc } from "@/lib/availabilityTime";
 
 export const SCHEDULER_TIME_GRANULARITY_MINUTES = 15;
 export const DEFAULT_SCHEDULER_ROOM_ID = "default-room";
@@ -47,6 +48,16 @@ export type SolverPayload = {
 function parseDate(value: string) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseSchedulerLocalDateTime(value: string, timeZone: string) {
+  const local = parseLocalDateTimeInput(value);
+
+  if (!local) {
+    return null;
+  }
+
+  return zonedToUtc(local, timeZone, { rejectNonexistent: true });
 }
 
 function slugify(value: string) {
@@ -182,16 +193,18 @@ export function wouldCreateDependencyCycle({
 export function buildSolverPayload({
   horizonStart,
   horizonEnd,
+  timeZone,
   blocks,
   members,
 }: {
   horizonStart: string;
   horizonEnd: string;
+  timeZone: string;
   blocks: ScheduleBuilderBlock[];
   members: TeamAvailabilityMember[];
 }): SolverPayload | null {
-  const parsedHorizonStart = parseDate(horizonStart);
-  const parsedHorizonEnd = parseDate(horizonEnd);
+  const parsedHorizonStart = parseSchedulerLocalDateTime(horizonStart, timeZone);
+  const parsedHorizonEnd = parseSchedulerLocalDateTime(horizonEnd, timeZone);
 
   if (!parsedHorizonStart || !parsedHorizonEnd || parsedHorizonEnd <= parsedHorizonStart) {
     return null;

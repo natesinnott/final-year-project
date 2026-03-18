@@ -1,5 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { RehearsalStatus } from "@prisma/client";
+import {
+  auditAttendanceDiscardForRehearsal,
+  buildRehearsalReconciliationKey,
+  deleteAttendanceForRemovedParticipants,
+} from "@/lib/attendance";
 import { prisma } from "@/lib/prisma";
 
 export type PersistedRehearsalInput = {
@@ -101,6 +106,7 @@ export async function countVisibleRehearsalsThisWeek({
 export async function publishProductionRehearsals({
   productionId,
   createdById,
+  timeZone,
   solveRunId,
   sourceMetadata,
   horizonStart,
@@ -109,6 +115,7 @@ export async function publishProductionRehearsals({
 }: {
   productionId: string;
   createdById: string;
+  timeZone: string;
   solveRunId?: string | null;
   sourceMetadata?: Prisma.InputJsonValue | null;
   horizonStart: Date;
@@ -116,22 +123,145 @@ export async function publishProductionRehearsals({
   rehearsals: PersistedRehearsalInput[];
 }) {
   return prisma.$transaction(async (tx) => {
-    await tx.productionRehearsal.deleteMany({
+    const production = await tx.production.findUnique({
+      where: {
+        id: productionId,
+      },
+      select: {
+        id: true,
+        timeZone: true,
+      },
+    });
+
+    if (!production) {
+      throw new Error("Production not found.");
+    }
+
+    if (production.timeZone && production.timeZone !== timeZone) {
+      throw new Error(
+        `This production is already locked to ${production.timeZone}.`
+      );
+    }
+
+    if (!production.timeZone) {
+      await tx.production.update({
+        where: {
+          id: productionId,
+        },
+        data: {
+          timeZone,
+        },
+      });
+    }
+
+    const now = new Date();
+    const existingFutureRehearsals = await tx.productionRehearsal.findMany({
       where: {
         productionId,
+        status: RehearsalStatus.PUBLISHED,
         start: {
+          gte: now,
           lt: horizonEnd,
         },
         end: {
           gt: horizonStart,
         },
       },
+      select: {
+        id: true,
+        title: true,
+        start: true,
+        end: true,
+        productionId: true,
+        participants: {
+          select: {
+            userId: true,
+          },
+        },
+      },
     });
 
+    const existingByKey = new Map<
+      string,
+      (typeof existingFutureRehearsals)[number]
+    >();
+
+    for (const rehearsal of existingFutureRehearsals) {
+      const key = buildRehearsalReconciliationKey(rehearsal);
+
+      if (existingByKey.has(key)) {
+        throw new Error(
+          `Existing published rehearsal reconciliation is ambiguous for "${rehearsal.title}".`
+        );
+      }
+
+      existingByKey.set(key, rehearsal);
+    }
+
+    const normalizedRehearsals = rehearsals.map((rehearsal) => ({
+      ...rehearsal,
+      title: rehearsal.title.trim(),
+      participantUserIds: [...new Set(rehearsal.participantUserIds)],
+    }));
+
+    const nextKeys = new Set<string>();
+    const matchedExistingIds = new Set<string>();
     const createdRehearsals = [];
 
-    for (const rehearsal of rehearsals) {
-      const participantUserIds = [...new Set(rehearsal.participantUserIds)];
+    for (const rehearsal of normalizedRehearsals) {
+      const reconciliationKey = buildRehearsalReconciliationKey(rehearsal);
+
+      if (nextKeys.has(reconciliationKey)) {
+        throw new Error(
+          `Duplicate rehearsal reconciliation key for "${rehearsal.title}".`
+        );
+      }
+
+      nextKeys.add(reconciliationKey);
+      const existing = existingByKey.get(reconciliationKey);
+
+      if (existing) {
+        matchedExistingIds.add(existing.id);
+
+        const currentParticipantIds = new Set(
+          existing.participants.map((participant) => participant.userId)
+        );
+        const nextParticipantIds = new Set(rehearsal.participantUserIds);
+        const removedUserIds = [...currentParticipantIds].filter(
+          (userId) => !nextParticipantIds.has(userId)
+        );
+        const addedUserIds = [...nextParticipantIds].filter(
+          (userId) => !currentParticipantIds.has(userId)
+        );
+
+        if (removedUserIds.length > 0) {
+          await deleteAttendanceForRemovedParticipants(tx, {
+            rehearsal: existing,
+            removedUserIds,
+          });
+
+          await tx.rehearsalParticipant.deleteMany({
+            where: {
+              rehearsalId: existing.id,
+              userId: {
+                in: removedUserIds,
+              },
+            },
+          });
+        }
+
+        if (addedUserIds.length > 0) {
+          await tx.rehearsalParticipant.createMany({
+            data: addedUserIds.map((userId) => ({
+              rehearsalId: existing.id,
+              userId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        continue;
+      }
 
       const created = await tx.productionRehearsal.create({
         data: {
@@ -143,10 +273,10 @@ export async function publishProductionRehearsals({
           status: RehearsalStatus.PUBLISHED,
           solveRunId: solveRunId ?? null,
           sourceMetadata: sourceMetadata ?? undefined,
-          participants: participantUserIds.length
+          participants: rehearsal.participantUserIds.length
             ? {
                 createMany: {
-                  data: participantUserIds.map((userId) => ({
+                  data: rehearsal.participantUserIds.map((userId) => ({
                     userId,
                   })),
                 },
@@ -163,6 +293,20 @@ export async function publishProductionRehearsals({
       });
 
       createdRehearsals.push(created);
+    }
+
+    const rehearsalsToReplace = existingFutureRehearsals.filter(
+      (rehearsal) => !matchedExistingIds.has(rehearsal.id)
+    );
+
+    for (const rehearsal of rehearsalsToReplace) {
+      await auditAttendanceDiscardForRehearsal(tx, rehearsal);
+
+      await tx.productionRehearsal.delete({
+        where: {
+          id: rehearsal.id,
+        },
+      });
     }
 
     return createdRehearsals;

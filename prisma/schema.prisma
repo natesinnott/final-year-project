@@ -46,24 +46,49 @@ enum RehearsalStatus {
   PUBLISHED
 }
 
+enum AttendanceStatus {
+  PRESENT
+  REPORTED_ABSENT
+  NO_SHOW
+}
+
+enum AttendanceAuditActorType {
+  USER
+  STAFF
+  SYSTEM
+}
+
+enum AttendanceAuditEvent {
+  SELF_REPORTED_ABSENT
+  UPDATED_ABSENCE_NOTE
+  CLEARED_TO_PRESENT
+  MARKED_NO_SHOW
+  DELETED_ON_PARTICIPANT_REMOVAL
+  DISCARDED_ON_REHEARSAL_REPLACEMENT
+}
+
 model User {
-  id                String             @id
-  name              String
-  email             String
-  emailVerified     Boolean            @default(false)
-  image             String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  sessions          Session[]
-  accounts          Account[]
-  memberships       Membership[]
-  announcements     Announcement[]
-  fileUploads       FileAsset[]
-  productionMembers ProductionMember[]
-  productionInvites ProductionInvite[]
-  availability      AvailabilityWindow[]
-  createdRehearsals ProductionRehearsal[]
-  rehearsalLinks    RehearsalParticipant[]
+  id                          String                    @id
+  name                        String
+  email                       String
+  emailVerified               Boolean                   @default(false)
+  image                       String?
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  sessions                    Session[]
+  accounts                    Account[]
+  memberships                 Membership[]
+  announcements               Announcement[]
+  fileUploads                 FileAsset[]
+  productionMembers           ProductionMember[]
+  productionInvites           ProductionInvite[]
+  availability                AvailabilityWindow[]
+  createdRehearsals           ProductionRehearsal[]
+  rehearsalLinks              RehearsalParticipant[]
+  rehearsalAttendance         RehearsalAttendance[]     @relation("RehearsalAttendanceSubject")
+  createdRehearsalAttendance  RehearsalAttendance[]     @relation("RehearsalAttendanceCreatedBy")
+  updatedRehearsalAttendance  RehearsalAttendance[]     @relation("RehearsalAttendanceUpdatedBy")
+  rehearsalAttendanceAudits   RehearsalAttendanceAudit[] @relation("RehearsalAttendanceAuditActor")
 
   @@unique([email])
   @@map("user")
@@ -225,6 +250,7 @@ model Production {
   description    String?
   rehearsalStart DateTime?
   rehearsalEnd   DateTime?
+  timeZone       String?
   venue          String?
   directorRoles  String[]  @default([])
   createdAt      DateTime  @default(now())
@@ -232,13 +258,14 @@ model Production {
 
   organisationId String
 
-  organisation  Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  members       ProductionMember[]
-  announcements Announcement[]
-  files         FileAsset[]
-  invites       ProductionInvite[]
-  availability  AvailabilityWindow[]
-  rehearsals    ProductionRehearsal[]
+  organisation     Organisation               @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  members          ProductionMember[]
+  announcements    Announcement[]
+  files            FileAsset[]
+  invites          ProductionInvite[]
+  availability     AvailabilityWindow[]
+  rehearsals       ProductionRehearsal[]
+  attendanceAudits RehearsalAttendanceAudit[]
 
   @@index([organisationId])
 }
@@ -297,15 +324,15 @@ model AvailabilityWindow {
 }
 
 model ProductionRehearsal {
-  id             String           @id @default(cuid())
+  id             String                  @id @default(cuid())
   title          String
   start          DateTime
   end            DateTime
-  status         RehearsalStatus  @default(DRAFT)
+  status         RehearsalStatus         @default(DRAFT)
   solveRunId     String?
   sourceMetadata Json?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
 
   productionId String
   createdById  String
@@ -313,6 +340,7 @@ model ProductionRehearsal {
   production   Production             @relation(fields: [productionId], references: [id], onDelete: Cascade)
   createdBy    User                   @relation(fields: [createdById], references: [id], onDelete: Cascade)
   participants RehearsalParticipant[]
+  attendance   RehearsalAttendance[]
 
   @@index([productionId, start])
   @@index([productionId, status, start])
@@ -331,4 +359,50 @@ model RehearsalParticipant {
   @@unique([rehearsalId, userId])
   @@index([userId])
   @@index([rehearsalId])
+}
+
+model RehearsalAttendance {
+  id          String           @id @default(cuid())
+  status      AttendanceStatus
+  note        String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  rehearsalId String
+  userId      String
+  createdById String?
+  updatedById String?
+
+  rehearsal ProductionRehearsal @relation(fields: [rehearsalId], references: [id], onDelete: Cascade)
+  user      User                @relation("RehearsalAttendanceSubject", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy User?               @relation("RehearsalAttendanceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User?               @relation("RehearsalAttendanceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([rehearsalId, userId])
+  @@index([userId])
+  @@index([rehearsalId, status])
+}
+
+model RehearsalAttendanceAudit {
+  id             String                   @id @default(cuid())
+  createdAt      DateTime                 @default(now())
+  productionId   String
+  rehearsalId    String
+  rehearsalTitle String
+  rehearsalStart DateTime
+  rehearsalEnd   DateTime
+  subjectUserId  String
+  actorUserId    String?
+  actorType      AttendanceAuditActorType
+  event          AttendanceAuditEvent
+  previousStatus AttendanceStatus?
+  nextStatus     AttendanceStatus?
+  note           String?
+  metadata       Json?
+
+  production Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  actor      User?      @relation("RehearsalAttendanceAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([productionId, createdAt])
+  @@index([rehearsalId, createdAt])
+  @@index([subjectUserId, createdAt])
 }
