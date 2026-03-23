@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { formatInstantInTimeZone } from "@/lib/availabilityTime";
+import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type RosterEntry = {
   userId: string;
@@ -58,6 +58,7 @@ export default function TodayAttendanceClient({
   productionTimeZone,
   blocks,
 }: TodayAttendanceClientProps) {
+  const dateTime = useBrowserDateTime();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -143,8 +144,8 @@ export default function TodayAttendanceClient({
                     {block.title}
                   </a>
                   <p className="mt-1 text-sm text-slate-300">
-                    {formatInstantInTimeZone(block.start, productionTimeZone)} to{" "}
-                    {formatInstantInTimeZone(block.end, productionTimeZone)}
+                    {dateTime.formatInstant(block.start, productionTimeZone)} to{" "}
+                    {dateTime.formatInstant(block.end, productionTimeZone)}
                   </p>
                 </div>
 

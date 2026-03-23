@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { formatInstantInTimeZone } from "@/lib/availabilityTime";
+import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type RosterEntry = {
   userId: string;
@@ -68,6 +68,7 @@ export default function RehearsalDetailClient({
   selfAttendance,
   roster = [],
 }: RehearsalDetailClientProps) {
+  const dateTime = useBrowserDateTime();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -206,13 +207,13 @@ export default function RehearsalDetailClient({
           <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
             Start:{" "}
             <span className="text-white">
-              {formatInstantInTimeZone(detail.start, productionTimeZone)}
+              {dateTime.formatInstant(detail.start, productionTimeZone)}
             </span>
           </div>
           <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
             End:{" "}
             <span className="text-white">
-              {formatInstantInTimeZone(detail.end, productionTimeZone)}
+              {dateTime.formatInstant(detail.end, productionTimeZone)}
             </span>
           </div>
           <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
