@@ -5,7 +5,6 @@ import type { TeamAvailabilityMember } from "@/lib/availability";
 import {
   CURATED_TIME_ZONES,
   detectSystemTimeZone,
-  formatInstantInTimeZone,
   isValidTimeZone,
   parseLocalDateTimeInput,
   utcToDateTimeInputValue,
@@ -22,6 +21,7 @@ import {
   type ScheduleBuilderBlock,
   type SolverPrecedence,
 } from "@/lib/scheduling";
+import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type ScheduleClientProps = {
   productionId: string;
@@ -171,7 +171,11 @@ function extractSolveResult(payload: unknown): SolveResult | null {
   return null;
 }
 
-function formatDateTime(value: string | undefined, timeZone: string) {
+function formatDateTime(
+  value: string | undefined,
+  timeZone: string,
+  formatInstant: (value: string | Date, timeZone: string) => string
+) {
   if (!value) {
     return "-";
   }
@@ -181,7 +185,7 @@ function formatDateTime(value: string | undefined, timeZone: string) {
     return value;
   }
 
-  return formatInstantInTimeZone(date, timeZone);
+  return formatInstant(date, timeZone);
 }
 
 function toDateTimeInputValue(value: string | null, timeZone: string) {
@@ -372,6 +376,7 @@ export default function ScheduleClient({
   initialMembers,
   initialCompleteness,
 }: ScheduleClientProps) {
+  const dateTime = useBrowserDateTime();
   const detectedTimeZone = useMemo(() => detectSystemTimeZone(), []);
   const hasLockedTimeZone = Boolean(
     initialTimeZone && isValidTimeZone(initialTimeZone)
@@ -1407,8 +1412,8 @@ export default function ScheduleClient({
                       className="grid grid-cols-[1.1fr_1fr_1fr_0.7fr] gap-3 border-b border-slate-800 px-4 py-3 text-sm text-slate-200"
                     >
                       <div>{solvedBlockLabelMap[blockId] ?? blockId}</div>
-                      <div>{formatDateTime(placement.start, selectedTimeZone)}</div>
-                      <div>{formatDateTime(placement.end, selectedTimeZone)}</div>
+                      <div>{formatDateTime(placement.start, selectedTimeZone, dateTime.formatInstant)}</div>
+                      <div>{formatDateTime(placement.end, selectedTimeZone, dateTime.formatInstant)}</div>
                       <div>
                         {roomId === DEFAULT_SCHEDULER_ROOM_ID
                           ? DEFAULT_SCHEDULER_ROOM_NAME

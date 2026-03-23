@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   buildWeekDates,
-  formatLocalWeekday,
-  formatTimeLabel,
   localDateFromWallClock,
   localDateKey,
   splitWindowForWeek,
@@ -12,6 +10,7 @@ import {
   type LocalWallClock,
   type UtcWindow,
 } from "@/lib/availabilityTime";
+import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type WeeklyAvailabilityGridProps = {
   windows: UtcWindow[];
@@ -53,6 +52,7 @@ export default function WeeklyAvailabilityGrid({
   onPaintRange,
   onDeleteWindow,
 }: WeeklyAvailabilityGridProps) {
+  const dateTime = useBrowserDateTime();
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<DragCell | null>(null);
   const [dragCurrent, setDragCurrent] = useState<DragCell | null>(null);
@@ -116,10 +116,7 @@ export default function WeeklyAvailabilityGrid({
     return slots;
   }, [dragCurrent, dragStart]);
 
-  const timeLabels = useMemo(
-    () => Array.from({ length: 24 }, (_, hour) => formatTimeLabel(hour * 60)),
-    []
-  );
+  const timeLabels = Array.from({ length: 24 }, (_, hour) => dateTime.formatTimeLabel(hour * 60));
 
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 p-3">
@@ -131,7 +128,7 @@ export default function WeeklyAvailabilityGrid({
               key={localDateKey(date)}
               className="rounded-lg border border-slate-800 bg-slate-900/60 px-2 py-2 text-center text-xs font-semibold text-slate-200"
             >
-              {formatLocalWeekday(date, displayTimeZone)}
+              {dateTime.formatLocalDate(date, displayTimeZone)}
             </div>
           ))}
         </div>

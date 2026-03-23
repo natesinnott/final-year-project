@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type TeamWindow = {
   id: string;
@@ -38,17 +39,10 @@ type TeamAvailabilityClientProps = {
   productionId: string;
 };
 
-function prettyDate(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-  return `${date.toLocaleString()} (UTC: ${iso})`;
-}
-
 export default function TeamAvailabilityClient({
   productionId,
 }: TeamAvailabilityClientProps) {
+  const dateTime = useBrowserDateTime();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<TeamPayload | null>(null);
@@ -193,8 +187,8 @@ export default function TeamAvailabilityClient({
                         key={window.id}
                         className="grid grid-cols-[1.4fr_1.4fr_0.8fr] gap-3 border-b border-slate-800 px-3 py-2 text-sm text-slate-200"
                       >
-                        <div>{prettyDate(window.start)}</div>
-                        <div>{prettyDate(window.end)}</div>
+                        <div>{`${dateTime.formatBrowserZoneInstant(window.start)} (UTC: ${window.start})`}</div>
+                        <div>{`${dateTime.formatBrowserZoneInstant(window.end)} (UTC: ${window.end})`}</div>
                         <div>{window.kind}</div>
                       </div>
                     ))}

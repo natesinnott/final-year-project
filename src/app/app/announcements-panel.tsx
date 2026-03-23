@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type AnnouncementItem = {
   id: string;
@@ -26,6 +27,7 @@ export default function AnnouncementsPanel({
   canPost,
   announcements,
 }: AnnouncementsPanelProps) {
+  const dateTime = useBrowserDateTime();
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -118,7 +120,7 @@ export default function AnnouncementsPanel({
               <div className="font-medium text-white">{announcement.title}</div>
               <div className="mt-2 text-sm text-slate-300">{announcement.body}</div>
               <div className="mt-2 text-xs text-slate-500">
-                {new Date(announcement.createdAt).toLocaleString()}
+                {dateTime.formatBrowserZoneInstant(announcement.createdAt)}
                 {announcement.createdByName ? ` · ${announcement.createdByName}` : ""}
               </div>
             </article>

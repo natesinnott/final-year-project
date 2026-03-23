@@ -2,12 +2,11 @@
 
 import { useMemo, useState } from "react";
 import {
-  formatInstantInTimeZone,
   getLocalDateForInstant,
   localDateKey,
-  zonedToUtc,
   type LocalDate,
 } from "@/lib/availabilityTime";
+import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type RehearsalRow = {
   id: string;
@@ -33,22 +32,6 @@ type CalendarDay = {
   date: LocalDate;
   isCurrentMonth: boolean;
 };
-
-function formatMonthLabel(date: LocalDate, timeZone: string) {
-  const utc = zonedToUtc(
-    { year: date.year, month: date.month, day: 15, hour: 12, minute: 0 },
-    timeZone,
-    { rejectNonexistent: false }
-  );
-
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone,
-    month: "long",
-    year: "numeric",
-  }).format(
-    utc ?? new Date(Date.UTC(date.year, date.month - 1, 15, 12, 0))
-  );
-}
 
 function addCalendarDays(date: LocalDate, days: number): LocalDate {
   const next = new Date(Date.UTC(date.year, date.month - 1, date.day + days));
@@ -121,6 +104,7 @@ export default function ProductionRehearsalsClient({
   canViewAllRehearsals,
   rehearsals,
 }: ProductionRehearsalsClientProps) {
+  const dateTime = useBrowserDateTime();
   const [view, setView] = useState<"list" | "calendar">("list");
   const today = useMemo(
     () => getLocalDateForInstant(new Date(), productionTimeZone),
@@ -156,6 +140,13 @@ export default function ProductionRehearsalsClient({
   }, [productionTimeZone, rehearsals]);
 
   const monthGrid = useMemo(() => getMonthGrid(monthAnchor), [monthAnchor]);
+  const weekdayHeaders = Array.from({ length: 7 }, (_, index) =>
+    dateTime.formatLocalDate(
+      addCalendarDays({ year: 2024, month: 1, day: 1 }, index),
+      productionTimeZone,
+      { weekday: "short" }
+    )
+  );
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
@@ -214,8 +205,8 @@ export default function ProductionRehearsalsClient({
                 <div>
                   <h3 className="font-semibold text-white">{rehearsal.title}</h3>
                   <p className="mt-1 text-sm text-slate-300">
-                    {formatInstantInTimeZone(rehearsal.start, productionTimeZone)} to{" "}
-                    {formatInstantInTimeZone(rehearsal.end, productionTimeZone, {
+                    {dateTime.formatInstant(rehearsal.start, productionTimeZone)} to{" "}
+                    {dateTime.formatInstant(rehearsal.end, productionTimeZone, {
                       timeStyle: "short",
                     })}
                   </p>
@@ -255,7 +246,10 @@ export default function ProductionRehearsalsClient({
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold text-white">
-                {formatMonthLabel(monthAnchor, productionTimeZone)}
+                {dateTime.formatLocalDate(monthAnchor, productionTimeZone, {
+                  month: "long",
+                  year: "numeric",
+                })}
               </h3>
               <p className="text-sm text-slate-400">
                 Monday-first month view
@@ -289,9 +283,9 @@ export default function ProductionRehearsalsClient({
           </div>
 
           <div className="grid grid-cols-7 gap-px overflow-hidden rounded-2xl border border-slate-800 bg-slate-800">
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
+            {weekdayHeaders.map((label, index) => (
               <div
-                key={label}
+                key={`${index}-${label}`}
                 className="bg-slate-950/80 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400"
               >
                 {label}
@@ -323,7 +317,7 @@ export default function ProductionRehearsalsClient({
                           {rehearsal.title}
                         </div>
                         <div className="mt-1 text-slate-300">
-                          {formatInstantInTimeZone(rehearsal.start, productionTimeZone, {
+                          {dateTime.formatInstant(rehearsal.start, productionTimeZone, {
                             timeStyle: "short",
                           })}
                         </div>
