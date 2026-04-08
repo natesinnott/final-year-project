@@ -210,21 +210,21 @@ export default async function HomePage({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {isAppAdmin ? (
-                <a
+                <Link
                   href="/app/super-admin/organisations"
                   className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
                 >
                   App Admin
-                </a>
+                </Link>
               ) : null}
               {membership?.role === "ADMIN" ? (
                 <>
-                  <a
+                  <Link
                     href="/app/organisation/settings"
                     className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
                   >
                     Org Settings
-                  </a>
+                  </Link>
                   <Link
                     href="/app/productions/new"
                     className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-slate-950"
@@ -267,40 +267,40 @@ export default async function HomePage({
                 </button>
               </form>
               {canManageProduction ? (
-                <a
+                <Link
                   href={`/app/productions/${productionId}/settings`}
                   className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
                 >
                   Settings
-                </a>
+                </Link>
               ) : null}
-              <a
+              <Link
                 href={`/app/productions/${productionId}/availability`}
                 className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
               >
                 Availability
-              </a>
-              <a
+              </Link>
+              <Link
                 href={`/app/productions/${productionId}/rehearsals`}
                 className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
               >
                 Rehearsals
-              </a>
+              </Link>
               {canAccessScheduling ? (
-                <a
+                <Link
                   href={`/app/productions/${productionId}/availability/team`}
                   className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
                 >
                   Team Availability
-                </a>
+                </Link>
               ) : null}
               {canAccessScheduling ? (
-                <a
+                <Link
                   href={`/app/productions/${productionId}/schedule`}
                   className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
                 >
                   Scheduling
-                </a>
+                </Link>
               ) : null}
             </div>
           </div>
@@ -413,12 +413,12 @@ export default async function HomePage({
                     {availabilityCompleteness.missingMembers.length} people haven&apos;t submitted
                     availability.
                   </span>
-                  <a
+                  <Link
                     href={`/app/productions/${productionId}/availability/team`}
                     className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-slate-400"
                   >
                     Open Team Availability
-                  </a>
+                  </Link>
                 </div>
               ) : (
                 <span>All required members have submitted availability.</span>
