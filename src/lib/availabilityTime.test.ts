@@ -1,13 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  getWeekStartForInstant,
   localRangeToUtc,
-  localDateKey,
-  splitWindowForWeek,
+  utcToDateTimeInputValue,
   utcToZoned,
   zonedToUtc,
-  type UtcWindow,
 } from "./availabilityTime";
 
 const TZ = "America/New_York";
@@ -65,36 +62,9 @@ test("local painted range snaps in local time before UTC conversion", () => {
   });
 });
 
-test("week start is computed in selected display timezone", () => {
-  const weekStart = getWeekStartForInstant("2025-03-10T04:30:00.000Z", TZ);
-  assert.equal(localDateKey(weekStart), "2025-03-09");
-});
-
-test("utc windows are split by display timezone day boundaries", () => {
-  const weekStart = { year: 2025, month: 3, day: 9 };
-
-  const window: UtcWindow = {
-    id: "w1",
-    kind: "AVAILABLE",
-    start: "2025-03-10T03:00:00.000Z",
-    end: "2025-03-10T06:00:00.000Z",
-  };
-
-  const segments = splitWindowForWeek(window, weekStart, TZ);
-
-  assert.equal(segments.length, 2);
-  assert.deepEqual(segments[0], {
-    id: "w1",
-    kind: "AVAILABLE",
-    dayIndex: 0,
-    startMinute: 1380,
-    endMinute: 1440,
-  });
-  assert.deepEqual(segments[1], {
-    id: "w1",
-    kind: "AVAILABLE",
-    dayIndex: 1,
-    startMinute: 0,
-    endMinute: 120,
-  });
+test("utc instants format correctly for datetime-local inputs", () => {
+  assert.equal(
+    utcToDateTimeInputValue("2025-03-10T22:00:00.000Z", TZ),
+    "2025-03-10T18:00"
+  );
 });

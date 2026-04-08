@@ -1,13 +1,8 @@
 const MINUTE_MS = 60_000;
-const DAY_MS = 24 * 60 * MINUTE_MS;
-
-export type AvailabilityKind = "AVAILABLE" | "UNAVAILABLE";
-
 export type UtcWindow = {
   id: string;
   start: string;
   end: string;
-  kind: AvailabilityKind;
 };
 
 export type LocalWallClock = {
@@ -22,14 +17,6 @@ export type LocalDate = {
   year: number;
   month: number;
   day: number;
-};
-
-export type WeekSegment = {
-  id: string;
-  kind: AvailabilityKind;
-  dayIndex: number;
-  startMinute: number;
-  endMinute: number;
 };
 
 const dtfCache = new Map<string, Intl.DateTimeFormat>();
@@ -118,16 +105,6 @@ function compareLocalDate(a: LocalDate, b: LocalDate) {
     return a.month - b.month;
   }
   return a.day - b.day;
-}
-
-function addLocalDays(local: LocalDate, days: number): LocalDate {
-  const baseMs = Date.UTC(local.year, local.month - 1, local.day);
-  const next = new Date(baseMs + days * DAY_MS);
-  return {
-    year: next.getUTCFullYear(),
-    month: next.getUTCMonth() + 1,
-    day: next.getUTCDate(),
-  };
 }
 
 export function isValidTimeZone(timeZone: string) {
@@ -227,33 +204,10 @@ export function snapWallClockTo15(local: LocalWallClock, mode: "floor" | "ceil")
   };
 }
 
-export function getWeekStartForLocalDate(localDate: LocalDate) {
-  const date = new Date(Date.UTC(localDate.year, localDate.month - 1, localDate.day));
-  const dayOfWeek = date.getUTCDay();
-  return addLocalDays(localDate, -dayOfWeek);
-}
-
-export function getWeekStartForInstant(utcInstant: string | Date, timeZone: string) {
-  const local = utcToZoned(utcInstant, timeZone);
-  return getWeekStartForLocalDate({
-    year: local.year,
-    month: local.month,
-    day: local.day,
-  });
-}
-
-export function addWeeks(weekStart: LocalDate, offset: number) {
-  return addLocalDays(weekStart, offset * 7);
-}
-
 export function localDateKey(local: LocalDate) {
   return `${local.year.toString().padStart(4, "0")}-${local.month
     .toString()
     .padStart(2, "0")}-${local.day.toString().padStart(2, "0")}`;
-}
-
-export function buildWeekDates(weekStart: LocalDate) {
-  return Array.from({ length: 7 }, (_, index) => addLocalDays(weekStart, index));
 }
 
 export function localDateFromWallClock(local: LocalWallClock): LocalDate {
@@ -354,10 +308,6 @@ export function formatInstantInTimeZone(
   }).format(date);
 }
 
-export function localMinuteOfDay(local: LocalWallClock) {
-  return local.hour * 60 + local.minute;
-}
-
 export function localRangeToUtc(
   startLocal: LocalWallClock,
   endLocal: LocalWallClock,
@@ -377,92 +327,6 @@ export function localRangeToUtc(
     startUtcIso: startUtc.toISOString(),
     endUtcIso: endUtc.toISOString(),
   };
-}
-
-export function splitWindowForWeek(
-  window: UtcWindow,
-  weekStart: LocalDate,
-  timeZone: string
-): WeekSegment[] {
-  const startMs = new Date(window.start).getTime();
-  const endMs = new Date(window.end).getTime();
-
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
-    return [];
-  }
-
-  const weekDates = buildWeekDates(weekStart);
-  const dateToIndex = new Map(weekDates.map((date, index) => [localDateKey(date), index]));
-
-  const segments: WeekSegment[] = [];
-  let cursor = startMs;
-
-  while (cursor < endMs) {
-    const local = toLocalParts(cursor, timeZone);
-    const key = localDateKey(localDateFromWallClock(local));
-    const dayIndex = dateToIndex.get(key);
-
-    const nextDayUtc = zonedToUtc(
-      {
-        year: local.year,
-        month: local.month,
-        day: local.day,
-        hour: 24,
-        minute: 0,
-      },
-      timeZone,
-      { rejectNonexistent: false }
-    );
-
-    const chunkEndMs = Math.min(endMs, nextDayUtc?.getTime() ?? endMs);
-
-    if (dayIndex !== undefined) {
-      const localStart = toLocalParts(cursor, timeZone);
-      const localEnd = toLocalParts(chunkEndMs, timeZone);
-      const startMinute = localMinuteOfDay(localStart);
-      const sameDate =
-        localStart.year === localEnd.year &&
-        localStart.month === localEnd.month &&
-        localStart.day === localEnd.day;
-      const endMinute =
-        chunkEndMs === endMs ? (sameDate ? localMinuteOfDay(localEnd) : 24 * 60) : 24 * 60;
-
-      if (endMinute > startMinute) {
-        segments.push({
-          id: window.id,
-          kind: window.kind,
-          dayIndex,
-          startMinute,
-          endMinute,
-        });
-      }
-    }
-
-    if (chunkEndMs <= cursor) {
-      break;
-    }
-
-    cursor = chunkEndMs;
-  }
-
-  return segments;
-}
-
-export function formatLocalWeekday(local: LocalDate, timeZone: string) {
-  const utcMidday = zonedToUtc(
-    { year: local.year, month: local.month, day: local.day, hour: 12, minute: 0 },
-    timeZone,
-    { rejectNonexistent: false }
-  );
-
-  const date = utcMidday ?? new Date(Date.UTC(local.year, local.month - 1, local.day, 12, 0));
-
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  }).format(date);
 }
 
 export function formatTimeLabel(minutes: number) {

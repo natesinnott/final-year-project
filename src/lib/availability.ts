@@ -1,4 +1,3 @@
-import { AvailabilityKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type MissingMember = {
@@ -11,7 +10,6 @@ export type TeamAvailabilityWindow = {
   id: string;
   start: string;
   end: string;
-  kind: AvailabilityKind;
 };
 
 export type TeamAvailabilityMember = {
@@ -19,6 +17,7 @@ export type TeamAvailabilityMember = {
   name: string;
   email: string;
   role: string;
+  submittedAt: string | null;
   windows: TeamAvailabilityWindow[];
 };
 
@@ -29,13 +28,6 @@ export type AvailabilityCompleteness = {
   submittedMembers: number;
   missingMembers: MissingMember[];
 };
-
-export function parseAvailabilityKind(kind: unknown) {
-  if (kind === "AVAILABLE" || kind === "UNAVAILABLE") {
-    return kind as AvailabilityKind;
-  }
-  return null;
-}
 
 export function parseUtcDate(value: unknown) {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -83,6 +75,30 @@ export async function findOverlappingAvailabilityWindow({
     },
     select: { id: true },
   });
+}
+
+export async function markConflictsSubmitted({
+  productionId,
+  userId,
+  submittedAt,
+}: {
+  productionId: string;
+  userId: string;
+  submittedAt?: Date;
+}) {
+  const timestamp = submittedAt ?? new Date();
+
+  await prisma.productionMember.updateMany({
+    where: {
+      productionId,
+      userId,
+    },
+    data: {
+      conflictsSubmittedAt: timestamp,
+    },
+  });
+
+  return timestamp;
 }
 
 export async function getAvailabilityCompleteness(
@@ -137,18 +153,11 @@ export async function getAvailabilityCompleteness(
     };
   }
 
-  const submitted = await prisma.availabilityWindow.findMany({
-    where: {
-      productionId,
-      userId: {
-        in: requiredMembers.map((member) => member.userId),
-      },
-    },
-    select: { userId: true },
-    distinct: ["userId"],
-  });
-
-  const submittedUserIds = new Set(submitted.map((entry) => entry.userId));
+  const submittedUserIds = new Set(
+    requiredMembers
+      .filter((member) => member.conflictsSubmittedAt !== null)
+      .map((member) => member.userId)
+  );
 
   const missingMembers = requiredMembers
     .filter((member) => !submittedUserIds.has(member.userId))
@@ -201,7 +210,6 @@ export async function getTeamAvailabilitySnapshot(productionId: string): Promise
       id: window.id,
       start: window.start.toISOString(),
       end: window.end.toISOString(),
-      kind: window.kind,
     };
     const existing = windowsByUser.get(window.userId);
 
@@ -218,6 +226,7 @@ export async function getTeamAvailabilitySnapshot(productionId: string): Promise
       name: member.user.name,
       email: member.user.email,
       role: member.role,
+      submittedAt: member.conflictsSubmittedAt?.toISOString() ?? null,
       windows: windowsByUser.get(member.userId) ?? [],
     })),
     completeness,

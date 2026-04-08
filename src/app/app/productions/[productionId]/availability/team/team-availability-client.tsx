@@ -7,7 +7,6 @@ type TeamWindow = {
   id: string;
   start: string;
   end: string;
-  kind: "AVAILABLE" | "UNAVAILABLE";
 };
 
 type TeamMember = {
@@ -15,6 +14,7 @@ type TeamMember = {
   name: string;
   email: string;
   role: string;
+  submittedAt: string | null;
   windows: TeamWindow[];
 };
 
@@ -59,7 +59,7 @@ export default function TeamAvailabilityClient({
       const payload = (await response.json()) as TeamPayload & { error?: string };
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Unable to load team availability.");
+        throw new Error(payload.error ?? "Unable to load team conflicts.");
       }
 
       setData(payload);
@@ -83,7 +83,7 @@ export default function TeamAvailabilityClient({
               Completeness
             </p>
             <h2 className="mt-2 text-lg font-semibold text-white">
-              Availability status
+              Conflict submission status
             </h2>
           </div>
           <span
@@ -94,8 +94,8 @@ export default function TeamAvailabilityClient({
             }`}
           >
             {data?.completeness.is_complete
-              ? "Availability complete"
-              : "Availability incomplete"}
+              ? "Conflicts complete"
+              : "Conflicts incomplete"}
           </span>
         </div>
 
@@ -119,7 +119,7 @@ export default function TeamAvailabilityClient({
         {data && data.completeness.missing_members.length > 0 ? (
           <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-4">
             <h3 className="text-sm font-semibold text-rose-100">
-              Members with no availability submitted
+              Members who have not submitted conflicts
             </h3>
             <ul className="mt-2 space-y-1 text-sm text-rose-100/90">
               {data.completeness.missing_members.map((member) => (
@@ -134,7 +134,7 @@ export default function TeamAvailabilityClient({
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Member windows</h2>
+          <h2 className="text-lg font-semibold text-white">Member conflicts</h2>
           <button
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500 disabled:opacity-60"
             onClick={loadTeamAvailability}
@@ -145,7 +145,7 @@ export default function TeamAvailabilityClient({
         </div>
 
         {isLoading ? (
-          <div className="mt-4 text-sm text-slate-300">Loading team availability...</div>
+          <div className="mt-4 text-sm text-slate-300">Loading team conflicts...</div>
         ) : null}
 
         {error ? (
@@ -169,27 +169,28 @@ export default function TeamAvailabilityClient({
                     </p>
                   </div>
                   <span className="text-xs text-slate-300">
-                    Windows: {member.windows.length}
+                    {member.submittedAt ? "Submitted" : "Not submitted"} · Conflicts:{" "}
+                    {member.windows.length}
                   </span>
                 </div>
 
                 {member.windows.length === 0 ? (
-                  <p className="mt-3 text-sm text-slate-400">No availability submitted.</p>
+                  <p className="mt-3 text-sm text-slate-400">
+                    {member.submittedAt ? "No conflicts submitted." : "No submission yet."}
+                  </p>
                 ) : (
                   <div className="mt-3 overflow-hidden rounded-lg border border-slate-800">
-                    <div className="grid grid-cols-[1.4fr_1.4fr_0.8fr] gap-3 border-b border-slate-800 bg-slate-950/70 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    <div className="grid grid-cols-[1fr_1fr] gap-3 border-b border-slate-800 bg-slate-950/70 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                       <div>Start</div>
                       <div>End</div>
-                      <div>Kind</div>
                     </div>
                     {member.windows.map((window) => (
                       <div
                         key={window.id}
-                        className="grid grid-cols-[1.4fr_1.4fr_0.8fr] gap-3 border-b border-slate-800 px-3 py-2 text-sm text-slate-200"
+                        className="grid grid-cols-[1fr_1fr] gap-3 border-b border-slate-800 px-3 py-2 text-sm text-slate-200"
                       >
                         <div>{`${dateTime.formatBrowserZoneInstant(window.start)} (UTC: ${window.start})`}</div>
                         <div>{`${dateTime.formatBrowserZoneInstant(window.end)} (UTC: ${window.end})`}</div>
-                        <div>{window.kind}</div>
                       </div>
                     ))}
                   </div>

@@ -6,7 +6,7 @@ import { canAccessProductionScheduling } from "@/lib/scheduler-access";
 import TeamAvailabilityClient from "./team-availability-client";
 
 export const metadata = {
-  title: "StageSuite | Team availability",
+  title: "StageSuite | Team conflicts",
 };
 
 export default async function ProductionTeamAvailabilityPage({
@@ -49,13 +49,13 @@ export default async function ProductionTeamAvailabilityPage({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
-                Team availability
+                Team conflicts
               </p>
               <h1 className="mt-3 text-2xl font-semibold text-white">
                 {production.name}
               </h1>
               <p className="mt-2 text-sm text-slate-300">
-                Read-only availability across the production and missing submissions.
+                Read-only conflicts across the production and missing submissions.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -63,7 +63,7 @@ export default async function ProductionTeamAvailabilityPage({
                 href={`/app/productions/${production.id}/availability`}
                 className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
               >
-                My availability
+                My conflicts
               </a>
               <a
                 href={`/app/productions/${production.id}/schedule`}

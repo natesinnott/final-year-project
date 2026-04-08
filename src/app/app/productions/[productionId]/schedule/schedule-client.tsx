@@ -482,7 +482,7 @@ export default function ScheduleClient({
         | null;
 
       if (!response.ok) {
-        throw new Error(getErrorMessage(body, "Failed to load production availability."));
+        throw new Error(getErrorMessage(body, "Failed to load production conflicts."));
       }
 
       setMembers(body?.members ?? []);
@@ -497,7 +497,7 @@ export default function ScheduleClient({
       );
     } catch (error) {
       setCompletenessError(
-        error instanceof Error ? error.message : "Failed to load production availability."
+        error instanceof Error ? error.message : "Failed to load production conflicts."
       );
     } finally {
       setCompletenessLoading(false);
@@ -674,13 +674,15 @@ export default function ScheduleClient({
     setJobStatus(null);
 
     if (completenessLoading) {
-      setErrorMessage("Availability completeness is still loading.");
+      setErrorMessage("Conflict submission status is still loading.");
       setIsRunning(false);
       return;
     }
 
     if (!completeness.is_complete) {
-      setErrorMessage("Scheduling is blocked until all required members submit availability.");
+      setErrorMessage(
+        "Scheduling is blocked until all required members review and submit conflicts."
+      );
       setIsRunning(false);
       return;
     }
@@ -938,7 +940,7 @@ export default function ScheduleClient({
                 : "border-rose-500/40 bg-rose-500/10 text-rose-100"
             }`}
           >
-            {completeness.is_complete ? "Availability complete" : "Availability incomplete"}
+            {completeness.is_complete ? "Conflicts complete" : "Conflicts incomplete"}
           </span>
           <span className="rounded-full border border-slate-700 bg-slate-950/40 px-3 py-1 text-slate-300">
             Blocks: {blocks.length}
@@ -1267,7 +1269,7 @@ export default function ScheduleClient({
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
               Readiness
             </p>
-            <h3 className="mt-2 text-lg font-semibold text-white">Availability status</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">Conflict submission status</h3>
 
             <div className="mt-4 grid gap-3 text-sm text-slate-300">
               <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
@@ -1293,13 +1295,13 @@ export default function ScheduleClient({
 
           <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-              Missing availability
+              Missing conflict submissions
             </p>
             <h3 className="mt-2 text-lg font-semibold text-white">Blocking members</h3>
 
             {completeness.missing_members.length === 0 ? (
               <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-                All required members have submitted availability.
+                All required members have submitted conflicts.
               </div>
             ) : (
               <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-4">

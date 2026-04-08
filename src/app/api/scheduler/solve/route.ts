@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   if (!completeness.isComplete) {
     return NextResponse.json(
       {
-        error: "Availability is incomplete. Scheduling is blocked.",
+        error: "Conflict submissions are incomplete. Scheduling is blocked.",
         missing_members: completeness.missingMembers,
         total_members: completeness.totalMembers,
         required_members: completeness.requiredMembers,

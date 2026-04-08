@@ -6,7 +6,7 @@ import { canAccessProduction } from "@/lib/scheduler-access";
 import AvailabilityClient from "./availability-client";
 
 export const metadata = {
-  title: "StageSuite | Availability",
+  title: "StageSuite | Conflicts",
 };
 
 export default async function ProductionAvailabilityPage({
@@ -49,13 +49,13 @@ export default async function ProductionAvailabilityPage({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
-                Availability
+                Conflicts
               </p>
               <h1 className="mt-3 text-2xl font-semibold text-white">
                 {production.name}
               </h1>
               <p className="mt-2 text-sm text-slate-300">
-                View and edit your availability in your selected time zone. Saved in UTC.
+                Add conflicts in your selected time zone. You are assumed available outside them.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">

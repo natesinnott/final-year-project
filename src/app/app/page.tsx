@@ -155,7 +155,7 @@ export default async function HomePage({
 
   const tasks = [
     {
-      title: "Submit availability for Week 4",
+      title: "Submit conflicts for Week 4",
       due: "Due in 2 days",
     },
     {
@@ -278,7 +278,7 @@ export default async function HomePage({
                 href={`/app/productions/${productionId}/availability`}
                 className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
               >
-                Availability
+                Conflicts
               </Link>
               <Link
                 href={`/app/productions/${productionId}/rehearsals`}
@@ -291,7 +291,7 @@ export default async function HomePage({
                   href={`/app/productions/${productionId}/availability/team`}
                   className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
                 >
-                  Team Availability
+                  Team Conflicts
                 </Link>
               ) : null}
               {canAccessScheduling ? (
@@ -384,7 +384,7 @@ export default async function HomePage({
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-white">Availability snapshot</h2>
+            <h2 className="text-base font-semibold text-white">Conflict submission snapshot</h2>
             <span className="text-xs text-slate-400">Static sample</span>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -411,7 +411,7 @@ export default async function HomePage({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span>
                     {availabilityCompleteness.missingMembers.length} people haven&apos;t submitted
-                    availability.
+                    conflicts.
                   </span>
                   <Link
                     href={`/app/productions/${productionId}/availability/team`}
@@ -421,12 +421,12 @@ export default async function HomePage({
                   </Link>
                 </div>
               ) : (
-                <span>All required members have submitted availability.</span>
+                <span>All required members have submitted conflicts.</span>
               )}
             </div>
           ) : (
             <div className="mt-4 text-xs text-slate-500">
-              {/* TODO: Replace with live missing-availability callout for non-director roles if needed. */}
+              {/* TODO: Replace with live missing-conflicts callout for non-director roles if needed. */}
               Missing-submission callout is shown for scheduling roles.
             </div>
           )}

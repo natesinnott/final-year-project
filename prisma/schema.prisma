@@ -271,9 +271,10 @@ model Production {
 }
 
 model ProductionMember {
-  id        String         @id @default(cuid())
-  role      ProductionRole
-  createdAt DateTime       @default(now())
+  id                   String         @id @default(cuid())
+  role                 ProductionRole
+  createdAt            DateTime       @default(now())
+  conflictsSubmittedAt DateTime?
 
   productionId String
   userId       String

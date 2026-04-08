@@ -1,5 +1,6 @@
 import type { TeamAvailabilityMember } from "@/lib/availability";
 import { parseLocalDateTimeInput, zonedToUtc } from "@/lib/availabilityTime";
+import { buildAvailabilityFromConflicts } from "./conflictAvailability";
 
 export const SCHEDULER_TIME_GRANULARITY_MINUTES = 15;
 export const DEFAULT_SCHEDULER_ROOM_ID = "default-room";
@@ -45,11 +46,6 @@ export type SolverPayload = {
   precedences: SolverPrecedence[];
 };
 
-function parseDate(value: string) {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
 function parseSchedulerLocalDateTime(value: string, timeZone: string) {
   const local = parseLocalDateTimeInput(value);
 
@@ -67,27 +63,6 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
-}
-
-function clipWindowToHorizon(windowStart: string, windowEnd: string, horizonStart: Date, horizonEnd: Date) {
-  const start = parseDate(windowStart);
-  const end = parseDate(windowEnd);
-
-  if (!start || !end || end <= start) {
-    return null;
-  }
-
-  const clippedStart = new Date(Math.max(start.getTime(), horizonStart.getTime()));
-  const clippedEnd = new Date(Math.min(end.getTime(), horizonEnd.getTime()));
-
-  if (clippedEnd <= clippedStart) {
-    return null;
-  }
-
-  return {
-    start: clippedStart.toISOString(),
-    end: clippedEnd.toISOString(),
-  };
 }
 
 export function buildSolverBlockId(block: Pick<ScheduleBuilderBlock, "clientId" | "label">) {
@@ -222,17 +197,11 @@ export function buildSolverPayload({
     })),
     people: members.map((member) => ({
       id: member.userId,
-      availability_windows: member.windows
-        .filter((window) => window.kind === "AVAILABLE")
-        .map((window) =>
-          clipWindowToHorizon(
-            window.start,
-            window.end,
-            parsedHorizonStart,
-            parsedHorizonEnd
-          )
-        )
-        .filter((window): window is { start: string; end: string } => Boolean(window)),
+      availability_windows: buildAvailabilityFromConflicts({
+        conflicts: member.windows,
+        horizonStart: parsedHorizonStart,
+        horizonEnd: parsedHorizonEnd,
+      }),
     })),
     rooms: [
       {

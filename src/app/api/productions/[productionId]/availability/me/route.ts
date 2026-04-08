@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { getAvailabilityAccessContext } from "@/lib/availability-access";
 import {
   findOverlappingAvailabilityWindow,
-  parseAvailabilityKind,
   parseUtcDate,
 } from "@/lib/availability";
 
@@ -15,7 +14,6 @@ type RouteParams = {
 type CreateWindowPayload = {
   start?: string;
   end?: string;
-  kind?: string;
 };
 
 export async function GET(request: Request, { params }: RouteParams) {
@@ -37,22 +35,35 @@ export async function GET(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const windows = await prisma.availabilityWindow.findMany({
-    where: {
-      productionId,
-      userId,
-    },
-    orderBy: {
-      start: "asc",
-    },
-  });
+  const [windows, productionMember] = await Promise.all([
+    prisma.availabilityWindow.findMany({
+      where: {
+        productionId,
+        userId,
+      },
+      orderBy: {
+        start: "asc",
+      },
+    }),
+    prisma.productionMember.findUnique({
+      where: {
+        productionId_userId: {
+          productionId,
+          userId,
+        },
+      },
+      select: {
+        conflictsSubmittedAt: true,
+      },
+    }),
+  ]);
 
   return NextResponse.json({
+    submittedAt: productionMember?.conflictsSubmittedAt?.toISOString() ?? null,
     windows: windows.map((window) => ({
       id: window.id,
       start: window.start.toISOString(),
       end: window.end.toISOString(),
-      kind: window.kind,
       createdAt: window.createdAt.toISOString(),
       updatedAt: window.updatedAt.toISOString(),
     })),
@@ -87,18 +98,17 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   const start = parseUtcDate(payload.start);
   const end = parseUtcDate(payload.end);
-  const kind = parseAvailabilityKind(payload.kind ?? "AVAILABLE");
 
-  if (!start || !end || !kind) {
+  if (!start || !end) {
     return NextResponse.json(
-      { error: "Invalid start/end/kind values" },
+      { error: "Invalid start/end values" },
       { status: 400 }
     );
   }
 
   if (end <= start) {
     return NextResponse.json(
-      { error: "Availability end must be after start" },
+      { error: "Conflict end must be after start" },
       { status: 400 }
     );
   }
@@ -112,19 +122,34 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   if (overlapping) {
     return NextResponse.json(
-      { error: "Availability window overlaps an existing window" },
+      { error: "Conflict overlaps an existing conflict" },
       { status: 409 }
     );
   }
 
-  const created = await prisma.availabilityWindow.create({
-    data: {
-      productionId,
-      userId,
-      start,
-      end,
-      kind,
-    },
+  const submittedAt = new Date();
+  const created = await prisma.$transaction(async (tx) => {
+    const window = await tx.availabilityWindow.create({
+      data: {
+        productionId,
+        userId,
+        start,
+        end,
+        kind: "UNAVAILABLE",
+      },
+    });
+
+    await tx.productionMember.updateMany({
+      where: {
+        productionId,
+        userId,
+      },
+      data: {
+        conflictsSubmittedAt: submittedAt,
+      },
+    });
+
+    return window;
   });
 
   return NextResponse.json(
@@ -132,7 +157,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       id: created.id,
       start: created.start.toISOString(),
       end: created.end.toISOString(),
-      kind: created.kind,
+      submittedAt: submittedAt.toISOString(),
       createdAt: created.createdAt.toISOString(),
       updatedAt: created.updatedAt.toISOString(),
     },
