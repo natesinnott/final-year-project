@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type FileItem = {
   id: string;
@@ -27,6 +28,7 @@ export default function FilesPanel({
   canUpload,
   files,
 }: FilesPanelProps) {
+  const dateTime = useBrowserDateTime();
   const [isUploaderOpen, setIsUploaderOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
@@ -191,7 +193,7 @@ export default function FilesPanel({
                 </div>
               </div>
               <div className="text-xs text-slate-400">
-                {new Date(item.createdAt).toLocaleString()}
+                {dateTime.formatBrowserZoneInstant(item.createdAt)}
               </div>
               <div className="text-xs text-slate-400">{item.uploadedByName ?? "Unknown"}</div>
               <div className="text-right">

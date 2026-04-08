@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -66,12 +67,12 @@ export default async function ProductionsPage() {
               </p>
             </div>
             {membership.role === "ADMIN" ? (
-              <a
+              <Link
                 href="/app/productions/new"
                 className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950"
               >
                 Create production
-              </a>
+              </Link>
             ) : null}
           </div>
         </header>

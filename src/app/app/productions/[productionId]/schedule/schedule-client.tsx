@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TeamAvailabilityMember } from "@/lib/availability";
 import {
+  CURATED_TIME_ZONES,
+  detectSystemTimeZone,
+  isValidTimeZone,
+  parseLocalDateTimeInput,
+  utcToDateTimeInputValue,
+  zonedToUtc,
+} from "@/lib/availabilityTime";
+import {
   buildSolverBlockId,
   buildSolverPayload,
   DEFAULT_SCHEDULER_ROOM_ID,
@@ -13,11 +21,13 @@ import {
   type ScheduleBuilderBlock,
   type SolverPrecedence,
 } from "@/lib/scheduling";
+import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type ScheduleClientProps = {
   productionId: string;
   initialHorizonStart: string | null;
   initialHorizonEnd: string | null;
+  initialTimeZone: string | null;
   initialMembers: TeamAvailabilityMember[];
   initialCompleteness: CompletenessPayload;
 };
@@ -82,6 +92,7 @@ const SOLVER_RESULT_STATUSES = new Set([
   "TIME_LIMIT",
 ]);
 const PUBLISHABLE_SOLVER_STATUSES = new Set(["OPTIMAL", "FEASIBLE"]);
+const TIMEZONE_STORAGE_KEY = "stagesuite.schedule-timezone";
 
 function generateClientId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -160,7 +171,11 @@ function extractSolveResult(payload: unknown): SolveResult | null {
   return null;
 }
 
-function formatDateTime(value: string | undefined) {
+function formatDateTime(
+  value: string | undefined,
+  timeZone: string,
+  formatInstant: (value: string | Date, timeZone: string) => string
+) {
   if (!value) {
     return "-";
   }
@@ -170,21 +185,11 @@ function formatDateTime(value: string | undefined) {
     return value;
   }
 
-  return date.toLocaleString();
+  return formatInstant(date, timeZone);
 }
 
-function toDateTimeLocalValue(value: string | null) {
-  if (!value) {
-    return "";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return adjusted.toISOString().slice(0, 16);
+function toDateTimeInputValue(value: string | null, timeZone: string) {
+  return utcToDateTimeInputValue(value, timeZone);
 }
 
 function roundUpToQuarterHour(date: Date) {
@@ -205,14 +210,41 @@ function roundUpToQuarterHour(date: Date) {
   return rounded;
 }
 
-function getFallbackHorizonValues() {
+function getFallbackHorizonValues(timeZone: string) {
   const start = roundUpToQuarterHour(new Date());
   const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
 
   return {
-    start: toDateTimeLocalValue(start.toISOString()),
-    end: toDateTimeLocalValue(end.toISOString()),
+    start: utcToDateTimeInputValue(start.toISOString(), timeZone),
+    end: utcToDateTimeInputValue(end.toISOString(), timeZone),
   };
+}
+
+function parseSchedulerDateTime(value: string, timeZone: string) {
+  const local = parseLocalDateTimeInput(value);
+
+  if (!local) {
+    return null;
+  }
+
+  return {
+    local,
+    utc: zonedToUtc(local, timeZone, { rejectNonexistent: true }),
+  };
+}
+
+function convertDateTimeInputValue(
+  value: string,
+  fromTimeZone: string,
+  toTimeZone: string
+) {
+  const parsed = parseSchedulerDateTime(value, fromTimeZone);
+
+  if (!parsed?.utc) {
+    return "";
+  }
+
+  return utcToDateTimeInputValue(parsed.utc, toTimeZone);
 }
 
 function parseResponseJson(response: Response) {
@@ -235,16 +267,20 @@ function sleep(ms: number) {
   });
 }
 
-function validateHorizon(horizonStart: string, horizonEnd: string) {
+function validateHorizon(
+  horizonStart: string,
+  horizonEnd: string,
+  timeZone: string
+) {
   const errors: string[] = [];
-  const start = new Date(horizonStart);
-  const end = new Date(horizonEnd);
+  const start = parseSchedulerDateTime(horizonStart, timeZone);
+  const end = parseSchedulerDateTime(horizonEnd, timeZone);
 
-  if (!horizonStart || Number.isNaN(start.getTime())) {
+  if (!horizonStart || !start?.utc) {
     errors.push("Choose a valid horizon start date and time.");
   }
 
-  if (!horizonEnd || Number.isNaN(end.getTime())) {
+  if (!horizonEnd || !end?.utc) {
     errors.push("Choose a valid horizon end date and time.");
   }
 
@@ -252,15 +288,16 @@ function validateHorizon(horizonStart: string, horizonEnd: string) {
     return errors;
   }
 
-  if (end <= start) {
+  const startValue = start!;
+  const endValue = end!;
+
+  if (endValue.utc! <= startValue.utc!) {
     errors.push("Horizon end must be after the horizon start.");
   }
 
   if (
-    start.getSeconds() !== 0 ||
-    end.getSeconds() !== 0 ||
-    start.getMinutes() % SCHEDULER_TIME_GRANULARITY_MINUTES !== 0 ||
-    end.getMinutes() % SCHEDULER_TIME_GRANULARITY_MINUTES !== 0
+    startValue.local.minute % SCHEDULER_TIME_GRANULARITY_MINUTES !== 0 ||
+    endValue.local.minute % SCHEDULER_TIME_GRANULARITY_MINUTES !== 0
   ) {
     errors.push(
       `Horizon times must align to ${SCHEDULER_TIME_GRANULARITY_MINUTES}-minute increments.`
@@ -335,10 +372,22 @@ export default function ScheduleClient({
   productionId,
   initialHorizonStart,
   initialHorizonEnd,
+  initialTimeZone,
   initialMembers,
   initialCompleteness,
 }: ScheduleClientProps) {
-  const fallbackHorizon = useMemo(() => getFallbackHorizonValues(), []);
+  const dateTime = useBrowserDateTime();
+  const detectedTimeZone = useMemo(() => detectSystemTimeZone(), []);
+  const hasLockedTimeZone = Boolean(
+    initialTimeZone && isValidTimeZone(initialTimeZone)
+  );
+  const [selectedTimeZone, setSelectedTimeZone] = useState(
+    hasLockedTimeZone && initialTimeZone ? initialTimeZone : "UTC"
+  );
+  const [timeZoneReady, setTimeZoneReady] = useState(hasLockedTimeZone);
+  const timezoneOptions = useMemo(() => {
+    return Array.from(new Set([detectedTimeZone, "UTC", ...CURATED_TIME_ZONES]));
+  }, [detectedTimeZone]);
 
   const [members, setMembers] = useState(initialMembers);
   const [healthLoading, setHealthLoading] = useState(true);
@@ -349,12 +398,8 @@ export default function ScheduleClient({
   const [completenessError, setCompletenessError] = useState<string | null>(null);
   const [completeness, setCompleteness] = useState(initialCompleteness);
 
-  const [horizonStart, setHorizonStart] = useState(
-    toDateTimeLocalValue(initialHorizonStart) || fallbackHorizon.start
-  );
-  const [horizonEnd, setHorizonEnd] = useState(
-    toDateTimeLocalValue(initialHorizonEnd) || fallbackHorizon.end
-  );
+  const [horizonStart, setHorizonStart] = useState("");
+  const [horizonEnd, setHorizonEnd] = useState("");
   const [blocks, setBlocks] = useState<BlockDraft[]>([createEmptyBlock()]);
 
   const [isRunning, setIsRunning] = useState(false);
@@ -370,6 +415,58 @@ export default function ScheduleClient({
 
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (hasLockedTimeZone && initialTimeZone) {
+      setSelectedTimeZone(initialTimeZone);
+      setTimeZoneReady(true);
+      return;
+    }
+
+    const fromStorage =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(TIMEZONE_STORAGE_KEY)
+        : null;
+    const candidate =
+      fromStorage && isValidTimeZone(fromStorage) ? fromStorage : detectedTimeZone;
+
+    setSelectedTimeZone(candidate);
+    setTimeZoneReady(true);
+  }, [detectedTimeZone, hasLockedTimeZone, initialTimeZone]);
+
+  useEffect(() => {
+    if (!timeZoneReady) {
+      return;
+    }
+
+    const fallback = getFallbackHorizonValues(selectedTimeZone);
+    setHorizonStart((current) => {
+      if (current) {
+        return current;
+      }
+
+      return toDateTimeInputValue(initialHorizonStart, selectedTimeZone) || fallback.start;
+    });
+    setHorizonEnd((current) => {
+      if (current) {
+        return current;
+      }
+
+      return toDateTimeInputValue(initialHorizonEnd, selectedTimeZone) || fallback.end;
+    });
+  }, [initialHorizonEnd, initialHorizonStart, selectedTimeZone, timeZoneReady]);
+
+  useEffect(() => {
+    if (
+      hasLockedTimeZone ||
+      !timeZoneReady ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    window.localStorage.setItem(TIMEZONE_STORAGE_KEY, selectedTimeZone);
+  }, [hasLockedTimeZone, selectedTimeZone, timeZoneReady]);
 
   const loadScheduleData = useCallback(async () => {
     setCompletenessLoading(true);
@@ -495,8 +592,8 @@ export default function ScheduleClient({
   }
 
   const horizonErrors = useMemo(
-    () => validateHorizon(horizonStart, horizonEnd),
-    [horizonEnd, horizonStart]
+    () => validateHorizon(horizonStart, horizonEnd, selectedTimeZone),
+    [horizonEnd, horizonStart, selectedTimeZone]
   );
   const blockErrors = useMemo(
     () =>
@@ -534,11 +631,12 @@ export default function ScheduleClient({
         ? buildSolverPayload({
             horizonStart,
             horizonEnd,
+            timeZone: selectedTimeZone,
             blocks: normalizedBlocks,
             members,
           })
         : null,
-    [horizonEnd, horizonStart, isFormValid, members, normalizedBlocks]
+    [horizonEnd, horizonStart, isFormValid, members, normalizedBlocks, selectedTimeZone]
   );
   const placements = useMemo(() => solveResult?.placements ?? [], [solveResult]);
   const placementCount = placements.length;
@@ -550,11 +648,13 @@ export default function ScheduleClient({
     [solvedPlanSnapshot]
   );
   const canPublish =
+    timeZoneReady &&
     !isPublishing &&
     Boolean(solvedPlanSnapshot) &&
     Boolean(solveResult?.status && PUBLISHABLE_SOLVER_STATUSES.has(solveResult.status)) &&
     placementCount > 0;
   const solveBlocked =
+    !timeZoneReady ||
     isRunning ||
     completenessLoading ||
     !completeness.is_complete ||
@@ -672,6 +772,17 @@ export default function ScheduleClient({
       return;
     }
 
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        hasLockedTimeZone
+          ? `Published rehearsals will continue using ${selectedTimeZone}. Continue?`
+          : `Publishing will permanently lock this production to ${selectedTimeZone} until the future schedule is discarded and regenerated. Continue?`
+      )
+    ) {
+      return;
+    }
+
     setIsPublishing(true);
     setErrorMessage(null);
     setPublishMessage(null);
@@ -687,6 +798,7 @@ export default function ScheduleClient({
           body: JSON.stringify({
             horizon_start: solvedPlanSnapshot.horizonStart,
             horizon_end: solvedPlanSnapshot.horizonEnd,
+            time_zone: selectedTimeZone,
             solve_run_id: jobId,
             solver_status: solveResult.status,
             blocks: solvedPlanSnapshot.blocks.map((block) => ({
@@ -863,6 +975,54 @@ export default function ScheduleClient({
               Choose the solve horizon in {SCHEDULER_TIME_GRANULARITY_MINUTES}-minute increments.
             </p>
 
+            <div className="mt-4 grid gap-3 md:grid-cols-[1.1fr_1.9fr]">
+              <label className="grid gap-2 text-sm text-slate-300">
+                <span className="font-medium text-white">Scheduling time zone</span>
+                <select
+                  className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300 disabled:opacity-70"
+                  value={selectedTimeZone}
+                  disabled={hasLockedTimeZone}
+                  onChange={(event) => {
+                    const nextTimeZone = event.target.value;
+                    setHorizonStart((current) =>
+                      current
+                        ? convertDateTimeInputValue(
+                            current,
+                            selectedTimeZone,
+                            nextTimeZone
+                          ) || current
+                        : current
+                    );
+                    setHorizonEnd((current) =>
+                      current
+                        ? convertDateTimeInputValue(
+                            current,
+                            selectedTimeZone,
+                            nextTimeZone
+                          ) || current
+                        : current
+                    );
+                    setSelectedTimeZone(nextTimeZone);
+                  }}
+                >
+                  <option value={detectedTimeZone}>
+                    Local (Detected) · {detectedTimeZone}
+                  </option>
+                  {timezoneOptions.map((timeZone) => (
+                    <option key={timeZone} value={timeZone}>
+                      {timeZone}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+                {hasLockedTimeZone
+                  ? `Published rehearsals are locked to ${selectedTimeZone}.`
+                  : `Publishing will permanently lock this production to ${selectedTimeZone} until the future schedule is discarded and regenerated.`}
+              </div>
+            </div>
+
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <label className="grid gap-2 text-sm text-slate-300">
                 <span className="font-medium text-white">Horizon start</span>
@@ -871,6 +1031,7 @@ export default function ScheduleClient({
                   step={SCHEDULER_TIME_GRANULARITY_MINUTES * 60}
                   className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
                   value={horizonStart}
+                  disabled={!timeZoneReady}
                   onChange={(event) => setHorizonStart(event.target.value)}
                 />
               </label>
@@ -881,6 +1042,7 @@ export default function ScheduleClient({
                   step={SCHEDULER_TIME_GRANULARITY_MINUTES * 60}
                   className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
                   value={horizonEnd}
+                  disabled={!timeZoneReady}
                   onChange={(event) => setHorizonEnd(event.target.value)}
                 />
               </label>
@@ -1250,8 +1412,8 @@ export default function ScheduleClient({
                       className="grid grid-cols-[1.1fr_1fr_1fr_0.7fr] gap-3 border-b border-slate-800 px-4 py-3 text-sm text-slate-200"
                     >
                       <div>{solvedBlockLabelMap[blockId] ?? blockId}</div>
-                      <div>{formatDateTime(placement.start)}</div>
-                      <div>{formatDateTime(placement.end)}</div>
+                      <div>{formatDateTime(placement.start, selectedTimeZone, dateTime.formatInstant)}</div>
+                      <div>{formatDateTime(placement.end, selectedTimeZone, dateTime.formatInstant)}</div>
                       <div>
                         {roomId === DEFAULT_SCHEDULER_ROOM_ID
                           ? DEFAULT_SCHEDULER_ROOM_NAME

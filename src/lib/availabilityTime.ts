@@ -260,6 +260,100 @@ export function localDateFromWallClock(local: LocalWallClock): LocalDate {
   return { year: local.year, month: local.month, day: local.day };
 }
 
+export function parseLocalDateTimeInput(value: string): LocalWallClock | null {
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    year: Number.parseInt(match[1] ?? "0", 10),
+    month: Number.parseInt(match[2] ?? "0", 10),
+    day: Number.parseInt(match[3] ?? "0", 10),
+    hour: Number.parseInt(match[4] ?? "0", 10),
+    minute: Number.parseInt(match[5] ?? "0", 10),
+  };
+}
+
+export function formatWallClockForDateTimeInput(local: LocalWallClock) {
+  return `${local.year.toString().padStart(4, "0")}-${local.month
+    .toString()
+    .padStart(2, "0")}-${local.day.toString().padStart(2, "0")}T${local.hour
+    .toString()
+    .padStart(2, "0")}:${local.minute.toString().padStart(2, "0")}`;
+}
+
+export function utcToDateTimeInputValue(
+  utcInstant: string | Date | null,
+  timeZone: string
+) {
+  if (!utcInstant) {
+    return "";
+  }
+
+  const date = utcInstant instanceof Date ? utcInstant : new Date(utcInstant);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return formatWallClockForDateTimeInput(utcToZoned(date, timeZone));
+}
+
+export function localDateToUtcRange(localDate: LocalDate, timeZone: string) {
+  const start = zonedToUtc(
+    { year: localDate.year, month: localDate.month, day: localDate.day, hour: 0, minute: 0 },
+    timeZone,
+    { rejectNonexistent: false }
+  );
+  const end = zonedToUtc(
+    { year: localDate.year, month: localDate.month, day: localDate.day, hour: 24, minute: 0 },
+    timeZone,
+    { rejectNonexistent: false }
+  );
+
+  if (!start || !end || end <= start) {
+    return null;
+  }
+
+  return {
+    startUtc: start,
+    endUtc: end,
+  };
+}
+
+export function getLocalDateForInstant(
+  utcInstant: string | Date,
+  timeZone: string
+): LocalDate {
+  return localDateFromWallClock(utcToZoned(utcInstant, timeZone));
+}
+
+export function getTodayUtcRange(timeZone: string, referenceDate = new Date()) {
+  return localDateToUtcRange(getLocalDateForInstant(referenceDate, timeZone), timeZone);
+}
+
+export function formatInstantInTimeZone(
+  utcInstant: string | Date,
+  timeZone: string,
+  options?: Intl.DateTimeFormatOptions
+) {
+  const date = utcInstant instanceof Date ? utcInstant : new Date(utcInstant);
+  if (Number.isNaN(date.getTime())) {
+    return typeof utcInstant === "string" ? utcInstant : "";
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    ...(options ?? {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }),
+  }).format(date);
+}
+
 export function localMinuteOfDay(local: LocalWallClock) {
   return local.hour * 60 + local.minute;
 }

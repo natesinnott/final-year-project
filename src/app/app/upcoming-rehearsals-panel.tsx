@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type RehearsalItem = {
   id: string;
@@ -18,6 +19,7 @@ export default function UpcomingRehearsalsPanel({
   productionId,
   rehearsals,
 }: UpcomingRehearsalsPanelProps) {
+  const dateTime = useBrowserDateTime();
   const [nowTimestamp] = useState(() => Date.now());
 
   return (
@@ -58,7 +60,7 @@ export default function UpcomingRehearsalsPanel({
                   ) : null}
                 </div>
                 <div className="text-right text-sm font-medium text-slate-200">
-                  {rehearsalStart.toLocaleString([], {
+                  {dateTime.formatBrowserZoneInstant(rehearsal.startsAt, {
                     weekday: "short",
                     hour: "numeric",
                     minute: "2-digit",
