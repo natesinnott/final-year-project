@@ -202,6 +202,10 @@ export default async function HomePage({
     },
   ];
   const hasMultipleProductions = productionMemberships.length > 1;
+  const organisationName =
+    membership.organisation?.name ?? "No organisation selected";
+  const organisationRoleLabel = formatEnumLabel(membership.role ?? "MEMBER");
+  const productionRoleLabel = formatEnumLabel(productionMembership.role);
   const accessibleProductions = productionMemberships.map((entry) => ({
     id: entry.productionId,
     name: entry.production.name,
@@ -245,22 +249,32 @@ export default async function HomePage({
     : null;
 
   return (
-    <main className="min-h-dvh bg-slate-950 p-6 text-slate-100">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+    <main className="min-h-dvh bg-slate-950 px-4 py-5 text-slate-100 sm:px-6 sm:py-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 sm:gap-5">
         <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-sm backdrop-blur sm:p-6">
-  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
                 StageSuite
               </p>
-              <h1 className="mt-2 text-3xl font-semibold text-white sm:text-4x1">
+              <h1 className="mt-2 text-3xl font-semibold text-white sm:text-4xl">
                 Welcome back, {session.user?.name ?? "artist"}.
               </h1>
-              <p className="mt-2 text-sm text-slate-300">
-                Signed in to{" "}
-                {membership.organisation?.name ?? "No organisation selected"} as{" "}
-                {formatEnumLabel(membership.role ?? "MEMBER")}.
-              </p>
+              {hasMultipleProductions ? (
+                <p className="mt-2 text-sm text-slate-300">
+                  Signed in to {organisationName} as {organisationRoleLabel}.
+                </p>
+              ) : (
+                <div className="mt-2 flex flex-col gap-1 text-sm text-slate-300">
+                  <p>Signed in to {organisationName}.</p>
+                  <p>
+                    Working in {production.name} as {productionRoleLabel}.
+                  </p>
+                  {production.venue ? (
+                    <p className="text-slate-400">{production.venue}</p>
+                  ) : null}
+                </div>
+              )}
               {session.user?.email ? (
                 <p className="mt-1 text-sm text-slate-400">{session.user.email}</p>
               ) : null}
@@ -295,54 +309,51 @@ export default async function HomePage({
           </div>
         </header>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-              Current production
-            </p>
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold text-white">{production.name}</h2>
-                <p className="mt-1 text-sm text-slate-300">
-                  {production.venue ?? "Venue to be confirmed"}
-                </p>
-                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
-                  Your production role: {formatEnumLabel(productionMembership.role)}
-                </p>
+        {hasMultipleProductions ? (
+          <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm sm:p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
+                Current production
+              </p>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-semibold text-white">{production.name}</h2>
+                  <p className="text-sm text-slate-300">
+                    {production.venue ?? "Venue to be confirmed"}
+                  </p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    Your production role: {productionRoleLabel}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {hasMultipleProductions ? (
-            <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-sm">
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-sm sm:p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                 Available productions
               </p>
               <h2 className="mt-2 text-base font-semibold text-white">
                 Open another production
               </h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Choose which production dashboard you want to open.
-              </p>
-              <div className="mt-4">
+              <div className="mt-3">
                 <ProductionSwitcher
                   currentProductionId={productionId}
                   productions={accessibleProductions}
                 />
               </div>
             </section>
-          ) : null}
-        </section>
+          </section>
+        ) : null}
 
         <nav
           aria-label="Production tools"
-          className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-sm"
+          className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-sm sm:p-5"
         >
-          <div>
+          <div className="flex flex-col gap-3">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
               Production tools
             </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5">
               {productionWorkspaceLinks.map((link) => (
                 <Link
                   key={link.href}
@@ -361,11 +372,11 @@ export default async function HomePage({
           </div>
         </nav>
 
-        <section className="grid gap-2 md:grid-cols-4">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {productionSnapshot.map((item) => (
             <div
               key={item.label}
-              className="rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-2"
+              className="rounded-lg border border-slate-700/70 bg-slate-900/40 px-4 py-3"
             >
               <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                 {item.label}
