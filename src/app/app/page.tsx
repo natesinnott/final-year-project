@@ -8,6 +8,7 @@ import SignOutButton from "../sign-out-button";
 import AnnouncementsPanel from "./announcements-panel";
 import FilesPanel from "./files-panel";
 import UpcomingRehearsalsPanel from "./upcoming-rehearsals-panel";
+import ProductionSwitcher from "./production-switcher";
 import { isAppAdminEmail } from "@/lib/app-admin";
 import {
   countVisibleRehearsalsThisWeek,
@@ -30,6 +31,20 @@ const PRODUCTION_ROLES = [
 
 const DEFAULT_DIRECTOR_ROLES = ["DIRECTOR"];
 const ANNOUNCEMENT_ROLES = new Set(["DIRECTOR", "STAGE_MANAGER"]);
+
+type DashboardLink = {
+  href: string;
+  label: string;
+  description: string;
+};
+
+function formatEnumLabel(value: string) {
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export default async function HomePage({
   searchParams,
@@ -186,6 +201,46 @@ export default async function HomePage({
       value: "2 absences",
     },
   ];
+  const hasMultipleProductions = productionMemberships.length > 1;
+  const accessibleProductions = productionMemberships.map((entry) => ({
+    id: entry.productionId,
+    name: entry.production.name,
+  }));
+  const productionWorkspaceLinks: DashboardLink[] = [
+    {
+      href: `/app/productions/${productionId}/availability`,
+      label: "My conflicts",
+      description: "Share when you are unavailable for rehearsals.",
+    },
+    {
+      href: `/app/productions/${productionId}/rehearsals`,
+      label: "Rehearsals",
+      description: "See the published rehearsal plan for this production.",
+    },
+    canAccessScheduling
+      ? {
+          href: `/app/productions/${productionId}/availability/team`,
+          label: "Cast & crew conflicts",
+          description: "Review submitted conflicts and follow up on missing responses.",
+        }
+      : null,
+    canAccessScheduling
+      ? {
+          href: `/app/productions/${productionId}/schedule`,
+          label: "Scheduling",
+          description: "Build, review, and publish rehearsal blocks.",
+        }
+      : null,
+  ].filter((link): link is DashboardLink => Boolean(link));
+  const productionManagementLinks: DashboardLink[] = canManageProduction
+    ? [
+        {
+          href: `/app/productions/${productionId}/settings`,
+          label: "Production settings",
+          description: "Manage members, permissions, and production details.",
+        },
+      ]
+    : [];
 
   const availabilityCompleteness = canAccessScheduling
     ? await getAvailabilityCompleteness(productionId)
@@ -193,41 +248,45 @@ export default async function HomePage({
 
   return (
     <main className="min-h-dvh bg-slate-950 p-6 text-slate-100">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <header className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm backdrop-blur">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+        <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm backdrop-blur">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
                 StageSuite
               </p>
-              <h1 className="mt-2 text-3xl font-semibold text-white">
+              <h1 className="mt-3 text-3xl font-semibold text-white">
                 Welcome back, {session.user?.name ?? "artist"}.
               </h1>
-              <p className="mt-2 text-sm text-slate-300">
-                {membership?.organisation?.name ?? "No organisation selected"} ·{" "}
-                {membership?.role ?? "Member"}
+              <p className="mt-3 text-sm text-slate-300">
+                Signed in to{" "}
+                {membership.organisation?.name ?? "No organisation selected"} as{" "}
+                {formatEnumLabel(membership.role ?? "MEMBER")}.
               </p>
+              {session.user?.email ? (
+                <p className="mt-1 text-sm text-slate-400">{session.user.email}</p>
+              ) : null}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
               {isAppAdmin ? (
                 <Link
                   href="/app/super-admin/organisations"
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
                 >
                   App Admin
                 </Link>
               ) : null}
-              {membership?.role === "ADMIN" ? (
+              {membership.role === "ADMIN" ? (
                 <>
                   <Link
                     href="/app/organisation/settings"
-                    className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
+                    className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
                   >
                     Org Settings
                   </Link>
                   <Link
                     href="/app/productions/new"
-                    className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-slate-950"
+                    className="rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
                   >
                     Create Production
                   </Link>
@@ -236,88 +295,121 @@ export default async function HomePage({
               <SignOutButton />
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">
-                Current production
-              </div>
-              <div className="text-sm font-semibold text-white">{production.name}</div>
-              <div className="text-xs text-slate-300">
-                {production.venue ?? "Venue TBC"}
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <form action="/app" method="get" className="flex items-center gap-2">
-                <select
-                  name="productionId"
-                  defaultValue={productionId}
-                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
-                >
-                  {productionMemberships.map((entry) => (
-                    <option key={entry.productionId} value={entry.productionId}>
-                      {entry.production.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="submit"
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
-                >
-                  Switch
-                </button>
-              </form>
-              {canManageProduction ? (
-                <Link
-                  href={`/app/productions/${productionId}/settings`}
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
-                >
-                  Settings
-                </Link>
-              ) : null}
-              <Link
-                href={`/app/productions/${productionId}/availability`}
-                className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                Conflicts
-              </Link>
-              <Link
-                href={`/app/productions/${productionId}/rehearsals`}
-                className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                Rehearsals
-              </Link>
-              {canAccessScheduling ? (
-                <Link
-                  href={`/app/productions/${productionId}/availability/team`}
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
-                >
-                  Team Conflicts
-                </Link>
-              ) : null}
-              {canAccessScheduling ? (
-                <Link
-                  href={`/app/productions/${productionId}/schedule`}
-                  className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-slate-500"
-                >
-                  Scheduling
-                </Link>
-              ) : null}
-            </div>
-          </div>
-          <div className="grid gap-2 md:grid-cols-4">
-            {productionSnapshot.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-2"
-              >
-                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  {item.label}
-                </div>
-                <div className="mt-1 text-sm font-medium text-slate-100">{item.value}</div>
-              </div>
-            ))}
-          </div>
         </header>
+
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
+              Current production
+            </p>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold text-white">{production.name}</h2>
+                <p className="mt-1 text-sm text-slate-300">
+                  {production.venue ?? "Venue to be confirmed"}
+                </p>
+                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                  Your production role: {formatEnumLabel(productionMembership.role)}
+                </p>
+              </div>
+              <div className="rounded-full border border-slate-700/80 bg-slate-950/40 px-3 py-1 text-xs font-medium text-slate-300">
+                {hasMultipleProductions
+                  ? `${productionMemberships.length} productions available`
+                  : "Only production assigned to you"}
+              </div>
+            </div>
+          </div>
+
+          {hasMultipleProductions ? (
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                Available productions
+              </p>
+              <h2 className="mt-2 text-base font-semibold text-white">
+                Open another production
+              </h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Choose which production dashboard you want to open.
+              </p>
+              <div className="mt-4">
+                <ProductionSwitcher
+                  currentProductionId={productionId}
+                  productions={accessibleProductions}
+                />
+              </div>
+            </section>
+          ) : null}
+        </section>
+
+        <nav
+          aria-label="Production tools"
+          className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-sm"
+        >
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                Production tools
+              </p>
+              <p className="mt-1 text-sm text-slate-400">
+                Open the part of StageSuite you need for this production.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {productionWorkspaceLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="rounded-xl border border-slate-700/70 bg-slate-950/30 px-4 py-3 text-left transition hover:border-slate-500"
+                  >
+                    <span className="block text-sm font-semibold text-slate-100">
+                      {link.label}
+                    </span>
+                    <span className="mt-1 block text-xs leading-relaxed text-slate-400">
+                      {link.description}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {productionManagementLinks.length > 0 ? (
+              <div className="xl:w-72">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  Manage production
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {productionManagementLinks.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className="rounded-xl border border-slate-700/70 bg-slate-950/30 px-4 py-3 text-left transition hover:border-slate-500"
+                    >
+                      <span className="block text-sm font-semibold text-slate-100">
+                        {link.label}
+                      </span>
+                      <span className="mt-1 block text-xs leading-relaxed text-slate-400">
+                        {link.description}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </nav>
+
+        <section className="grid gap-2 md:grid-cols-4">
+          {productionSnapshot.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-2"
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                {item.label}
+              </div>
+              <div className="mt-1 text-sm font-medium text-slate-100">{item.value}</div>
+            </div>
+          ))}
+        </section>
 
         <section className="grid gap-6 lg:grid-cols-[1.45fr_1fr]">
           <div className="grid gap-6">
@@ -417,7 +509,7 @@ export default async function HomePage({
                     href={`/app/productions/${productionId}/availability/team`}
                     className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-slate-400"
                   >
-                    Open Team Availability
+                    Review cast &amp; crew conflicts
                   </Link>
                 </div>
               ) : (

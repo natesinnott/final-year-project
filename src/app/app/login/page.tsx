@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { authClient } from "@/lib/auth-client";
 import Link from "next/link";
+import { FormEvent, useState } from "react";
+import { OfficialSocialAuthButtons } from "@/components/auth/official-social-auth-buttons";
+import { authClient } from "@/lib/auth-client";
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [ssoEmail, setSsoEmail] = useState("");
   const [ssoError, setSsoError] = useState<string | null>(null);
+  const [socialAuthError, setSocialAuthError] = useState<string | null>(null);
   const [emailPassword, setEmailPassword] = useState({
     name: "",
     email: "",
@@ -50,11 +52,12 @@ export default function LoginPage() {
     return message || "Unable to create account.";
   }
 
-  async function signInWithGoogle() {
+  async function signInWithApple() {
     setIsLoading(true);
+    setSocialAuthError(null);
     try {
       await authClient.signIn.social({
-        provider: "google",
+        provider: "apple",
         callbackURL: "/app",
       });
     } finally {
@@ -62,13 +65,27 @@ export default function LoginPage() {
     }
   }
 
-  async function signInWithApple() {
+  async function signInWithGoogleCredential(idToken: string) {
     setIsLoading(true);
+    setSocialAuthError(null);
     try {
-      await authClient.signIn.social({
-        provider: "apple",
+      const result = await authClient.signIn.social({
+        provider: "google",
         callbackURL: "/app",
+        idToken: {
+          token: idToken,
+        },
       });
+      const error = getAuthResultError(result);
+      if (error) {
+        throw new Error(error);
+      }
+
+      window.location.assign("/app");
+    } catch (err) {
+      setSocialAuthError(
+        err instanceof Error ? err.message : "Unable to sign in with Google."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -114,13 +131,12 @@ export default function LoginPage() {
     setIsLoading(true);
     setSsoError(null);
     try {
-      // Resolve the org-specific provider from the user's email domain.
       const response = await fetch("/api/sso/resolve", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email: ssoEmail }),
+        body: JSON.stringify({ email: ssoEmail.trim() }),
       });
 
       const payload = await response.json();
@@ -130,7 +146,7 @@ export default function LoginPage() {
 
       if (!payload.providerId) {
         setSsoError(
-          "No organisation SSO configuration found. Use another sign-in method."
+          "No organisation SSO configuration was found for that email. Use another sign-in method."
         );
         return;
       }
@@ -150,9 +166,8 @@ export default function LoginPage() {
     setIsLoading(true);
     setEmailPasswordError(null);
     try {
-      // Email/password sign-in for non-SSO users.
       const result = await authClient.signIn.email({
-        email: emailPassword.email,
+        email: emailPassword.email.trim(),
         password: emailPassword.password,
         callbackURL: "/app",
       });
@@ -176,10 +191,10 @@ export default function LoginPage() {
       if (emailPassword.password !== emailPassword.confirmPassword) {
         throw new Error("Passwords do not match.");
       }
-      // Create a local account with email/password for the demo.
+      const cleanedEmail = emailPassword.email.trim();
       const signUpResult = await authClient.signUp.email({
-        name: emailPassword.name || emailPassword.email.split("@")[0] || "User",
-        email: emailPassword.email,
+        name: emailPassword.name || cleanedEmail.split("@")[0] || "User",
+        email: cleanedEmail,
         password: emailPassword.password,
         callbackURL: "/app",
       });
@@ -188,9 +203,8 @@ export default function LoginPage() {
         throw new Error(signUpError);
       }
 
-      // Ensure the user is signed in after account creation.
       const signInResult = await authClient.signIn.email({
-        email: emailPassword.email,
+        email: cleanedEmail,
         password: emailPassword.password,
         callbackURL: "/app",
       });
@@ -205,327 +219,307 @@ export default function LoginPage() {
     }
   }
 
+  async function handleSsoSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isLoading || ssoEmail.trim().length === 0) {
+      return;
+    }
+    await handleSsoRouting();
+  }
+
+  async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (emailAuthMode === "signIn") {
+      if (
+        isLoading ||
+        emailPassword.email.trim().length === 0 ||
+        emailPassword.password.length === 0
+      ) {
+        return;
+      }
+      await signInWithEmail();
+      return;
+    }
+
+    if (
+      isLoading ||
+      emailPassword.email.trim().length === 0 ||
+      emailPassword.password.length === 0 ||
+      emailPassword.confirmPassword.length === 0
+    ) {
+      return;
+    }
+
+    await signUpWithEmail();
+  }
+
+  const fieldClassName =
+    "w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-amber-300/70 focus:ring-2 focus:ring-amber-300/20";
+  const secondaryButtonClassName =
+    "inline-flex w-full items-center justify-center rounded-2xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-slate-500 hover:text-white disabled:opacity-60";
+  const secondaryProviders = [
+    {
+      label: "Microsoft Entra",
+      onClick: signInWithEntra,
+    },
+    {
+      label: "Okta",
+      onClick: signInWithOkta,
+    },
+    {
+      label: "Google Workspace",
+      onClick: signInWithGoogleWorkspace,
+    },
+  ];
+
+  const isEmailDisabled =
+    isLoading ||
+    emailPassword.email.trim().length === 0 ||
+    emailPassword.password.length === 0 ||
+    (emailAuthMode === "signUp" &&
+      emailPassword.confirmPassword.length === 0);
+
+  const isSsoDisabled = isLoading || ssoEmail.trim().length === 0;
+
   return (
-    <main className="relative min-h-dvh bg-slate-950 text-slate-100 font-sans antialiased">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-32 right-0 h-130 w-130 rounded-full bg-linear-to-br from-amber-400/25 via-orange-500/10 to-purple-500/10 blur-3xl" />
-        <div className="absolute left-0 top-1/3 h-140 w-140 rounded-full bg-linear-to-br from-sky-500/15 via-emerald-500/5 to-transparent blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_55%)]" />
-      </div>
+    <main className="min-h-dvh bg-slate-950 px-4 py-6 text-slate-100 font-sans antialiased sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-[calc(100dvh-3rem)] max-w-2xl items-center">
+        <section className="w-full rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl sm:p-8">
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-sm font-semibold tracking-tight text-white">
+              StageSuite
+            </div>
+            <Link
+              className="text-xs font-medium text-slate-300 transition hover:text-white"
+              href="/"
+            >
+              Back to home
+            </Link>
+          </div>
 
-      <div className="relative mx-auto flex w-full max-w-6xl flex-col justify-center px-4 py-10 sm:px-6 lg:px-8 lg:py-16">
-        <div className="grid items-stretch gap-8 lg:grid-cols-2">
-          <section className="rounded-3xl border border-slate-800/70 bg-slate-900/40 p-6 backdrop-blur sm:p-8">
-            <div className="flex items-center justify-between gap-4">
-              <div className="text-sm font-semibold tracking-tight text-white">
-                StageSuite
-              </div>
-              <Link
-                className="text-xs font-medium text-slate-300 hover:text-white"
-                href="/"
+          <div className="mt-8">
+            <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              Sign in
+            </h1>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <OfficialSocialAuthButtons
+              googleClientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+              isLoading={isLoading}
+              onGoogleCredential={signInWithGoogleCredential}
+              onAppleClick={signInWithApple}
+            />
+          </div>
+          {socialAuthError ? (
+            <div className="mt-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {socialAuthError}
+            </div>
+          ) : null}
+
+          <div className="mt-6 rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4">
+            <div className="grid w-full gap-2 rounded-2xl border border-slate-800/70 bg-slate-950/60 p-1 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmailAuthMode("signIn");
+                  setEmailPasswordError(null);
+                }}
+                className={`w-full rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
+  emailAuthMode === "signIn"
+    ? "bg-slate-800 text-white shadow-sm"
+    : "text-slate-300 hover:bg-slate-900/60 hover:text-white"
+}`}
+                disabled={isLoading}
               >
-                Back to home
-              </Link>
-            </div>
-
-            <div className="mt-10">
-              <p className="text-xs font-semibold tracking-wide text-amber-300">
                 Sign in
-              </p>
-              <h1 className="mt-4 text-3xl font-semibold leading-[1.05] tracking-tight text-white sm:text-4xl">
-                Welcome back.
-              </h1>
-              <p className="mt-4 max-w-prose text-sm leading-relaxed text-slate-300 sm:text-base">
-                Keep schedules, announcements, attendance, and files in one place—so rehearsals run on time, not on chaos.
-              </p>
-
-              <dl className="mt-10 grid gap-4">
-                <div className="rounded-2xl border border-slate-800/70 bg-slate-950/50 p-4">
-                  <dt className="text-sm font-semibold text-white">
-                    Set up your theatre in minutes
-                  </dt>
-                  <dd className="mt-1 text-sm text-slate-300">
-                    Create your organisation, add your first production, and invite your team.
-                  </dd>
-                </div>
-                <div className="rounded-2xl border border-slate-800/70 bg-slate-950/50 p-4">
-                  <dt className="text-sm font-semibold text-white">
-                    Role-based access, by default
-                  </dt>
-                  <dd className="mt-1 text-sm text-slate-300">
-                    Directors, stage managers, cast, and crew each see what they need.
-                  </dd>
-                </div>
-                <div className="rounded-2xl border border-slate-800/70 bg-slate-950/50 p-4">
-                  <dt className="text-sm font-semibold text-white">
-                    Start scheduling immediately
-                  </dt>
-                  <dd className="mt-1 text-sm text-slate-300">
-                    Capture availability, track attendance, and share rehearsal plans.
-                  </dd>
-                </div>
-              </dl>
-
-              <p className="mt-8 text-xs text-slate-400">
-                New here? No worries—you’ll be redirected to onboarding if you don’t belong to an organisation yet.
-              </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmailAuthMode("signUp");
+                  setEmailPasswordError(null);
+                }}
+                className={`w-full rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
+  emailAuthMode === "signUp"
+    ? "bg-slate-800 text-white shadow-sm"
+    : "text-slate-300 hover:bg-slate-900/60 hover:text-white"
+}`}
+                disabled={isLoading}
+              >
+                Create account
+              </button>
             </div>
-          </section>
 
-          <aside className="flex items-center">
-            <div className="w-full">
-              <div className="mx-auto w-full max-w-md rounded-3xl border border-slate-800/70 bg-slate-900/50 p-6 shadow-2xl backdrop-blur sm:p-8">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold tracking-wide text-amber-300">
-                      Secure sign-in
-                    </p>
-                    <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-                      Sign in to StageSuite
-                    </h2>
-                    <p className="mt-2 text-sm text-slate-300">
-                      Choose a provider to continue.
-                    </p>
-                  </div>
-                </div>
+            <form onSubmit={handleEmailSubmit} className="mt-4 grid gap-3">
+              {emailAuthMode === "signUp" ? (
+                <label className="grid gap-2 text-sm text-slate-200">
+                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    Full name
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Full name"
+                    value={emailPassword.name}
+                    onChange={(event) =>
+                      setEmailPassword((prev) => ({
+                        ...prev,
+                        name: event.target.value,
+                      }))
+                    }
+                    className={fieldClassName}
+                  />
+                </label>
+              ) : null}
 
-                <div className="mt-8 grid gap-3">
-                  <button
-                    onClick={signInWithGoogle}
-                    disabled={isLoading}
-                    className="inline-flex w-full items-center justify-center rounded-full bg-amber-300 px-5 py-3 text-sm font-semibold text-slate-950 shadow-sm hover:bg-amber-200 disabled:opacity-60"
-                  >
-                    {isLoading ? "Redirecting…" : "Continue with Google"}
-                  </button>
-                  <button
-                    onClick={signInWithApple}
-                    disabled={isLoading}
-                    className="inline-flex w-full items-center justify-center rounded-full border border-slate-700 bg-slate-950/30 px-5 py-3 text-sm font-semibold text-slate-100 hover:border-slate-500 disabled:opacity-60"
-                  >
-                    {isLoading ? "Redirecting…" : "Continue with Apple"}
-                  </button>
-                </div>
+              <label className="grid gap-2 text-sm text-slate-200">
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  Email address
+                </span>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={emailPassword.email}
+                  onChange={(event) =>
+                    setEmailPassword((prev) => ({
+                      ...prev,
+                      email: event.target.value,
+                    }))
+                  }
+                  className={fieldClassName}
+                />
+              </label>
 
-                <div className="mt-6 border-t border-slate-800/70 pt-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    SSO options
-                  </p>
-                  <p className="mt-2 text-xs text-slate-400">
-                    Use your organisation identity provider.
-                  </p>
-                  <div className="mt-4 grid gap-3">
-                    <button
-                      onClick={signInWithEntra}
-                      disabled={isLoading}
-                      className="inline-flex w-full items-center justify-center rounded-full border border-slate-700 bg-slate-950/30 px-5 py-2 text-xs font-semibold text-slate-100 hover:border-slate-500 disabled:opacity-60"
-                    >
-                      Continue with Microsoft Entra
-                    </button>
-                    <button
-                      onClick={signInWithOkta}
-                      disabled={isLoading}
-                      className="inline-flex w-full items-center justify-center rounded-full border border-slate-700 bg-slate-950/30 px-5 py-2 text-xs font-semibold text-slate-100 hover:border-slate-500 disabled:opacity-60"
-                    >
-                      Continue with Okta
-                    </button>
-                    <button
-                      onClick={signInWithGoogleWorkspace}
-                      disabled={isLoading}
-                      className="inline-flex w-full items-center justify-center rounded-full border border-slate-700 bg-slate-950/30 px-5 py-2 text-xs font-semibold text-slate-100 hover:border-slate-500 disabled:opacity-60"
-                    >
-                      Continue with Google Workspace
-                    </button>
-                  </div>
-                </div>
+              <label className="grid gap-2 text-sm text-slate-200">
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  Password
+                </span>
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={emailPassword.password}
+                  onChange={(event) =>
+                    setEmailPassword((prev) => ({
+                      ...prev,
+                      password: event.target.value,
+                    }))
+                  }
+                  className={fieldClassName}
+                />
+              </label>
 
-                <div className="mt-6 border-t border-slate-800/70 pt-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    Organisation SSO
-                  </p>
-                  <p className="mt-2 text-xs text-slate-400">
-                    Enter your work email and we will route you to the right
-                    identity provider.
-                  </p>
-                  <div className="mt-4 grid gap-3">
-                    <input
-                      type="email"
-                      placeholder="you@organisation.org"
-                      value={ssoEmail}
-                      onChange={(event) => setSsoEmail(event.target.value)}
-                      className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                    />
-                    <button
-                      onClick={handleSsoRouting}
-                      disabled={isLoading || ssoEmail.length === 0}
-                      className="inline-flex w-full items-center justify-center rounded-full bg-slate-100 px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950 hover:bg-white disabled:opacity-60"
-                    >
-                      {isLoading ? "Checking…" : "Continue with SSO"}
-                    </button>
-                  </div>
-                  {ssoError ? (
-                    <div className="mt-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-200">
-                      {ssoError}
-                    </div>
-                  ) : null}
-                </div>
+              {emailAuthMode === "signUp" ? (
+                <label className="grid gap-2 text-sm text-slate-200">
+                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    Confirm password
+                  </span>
+                  <input
+                    type="password"
+                    placeholder="Confirm password"
+                    value={emailPassword.confirmPassword}
+                    onChange={(event) =>
+                      setEmailPassword((prev) => ({
+                        ...prev,
+                        confirmPassword: event.target.value,
+                      }))
+                    }
+                    className={fieldClassName}
+                  />
+                </label>
+              ) : null}
 
-                <div className="mt-6 border-t border-slate-800/70 pt-6">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    Email and password
-                  </p>
-                  <div className="mt-4">
-                    <div className="grid gap-2 rounded-2xl border border-slate-800/70 bg-slate-950/40 p-2 sm:grid-cols-2">
-                      <button
-                        onClick={() => {
-                          setEmailAuthMode("signIn");
-                          setEmailPasswordError(null);
-                        }}
-                        className={`rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
-                          emailAuthMode === "signIn"
-                            ? "bg-amber-300 text-slate-950"
-                            : "text-slate-300 hover:text-white"
-                        }`}
-                        disabled={isLoading}
-                      >
-                        Sign in
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEmailAuthMode("signUp");
-                          setEmailPasswordError(null);
-                        }}
-                        className={`rounded-xl px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
-                          emailAuthMode === "signUp"
-                            ? "bg-amber-300 text-slate-950"
-                            : "text-slate-300 hover:text-white"
-                        }`}
-                        disabled={isLoading}
-                      >
-                        Create account
-                      </button>
-                    </div>
+              <button
+                type="submit"
+                disabled={isEmailDisabled}
+                className={`inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+                  isEmailDisabled
+                    ? "bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed"
+                    : "bg-amber-300 text-slate-950 hover:bg-amber-200"
+                }`}
+              >
+                {emailAuthMode === "signIn"
+                  ? isLoading
+                    ? "Signing in..."
+                    : "Sign in"
+                  : isLoading
+                    ? "Creating account..."
+                    : "Create account"}
+              </button>
+            </form>
 
-                    {emailAuthMode === "signIn" ? (
-                      <div className="mt-4 grid gap-3">
-                        <input
-                          type="email"
-                          placeholder="Email address"
-                          value={emailPassword.email}
-                          onChange={(event) =>
-                            setEmailPassword((prev) => ({
-                              ...prev,
-                              email: event.target.value,
-                            }))
-                          }
-                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                        />
-                        <input
-                          type="password"
-                          placeholder="Password"
-                          value={emailPassword.password}
-                          onChange={(event) =>
-                            setEmailPassword((prev) => ({
-                              ...prev,
-                              password: event.target.value,
-                            }))
-                          }
-                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                        />
-                        <button
-                          onClick={signInWithEmail}
-                          disabled={
-                            isLoading ||
-                            emailPassword.email.length === 0 ||
-                            emailPassword.password.length === 0
-                          }
-                          className="inline-flex w-full items-center justify-center rounded-full border border-slate-700 bg-slate-950/30 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-100 hover:border-slate-500 disabled:opacity-60"
-                        >
-                          Sign in
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="mt-4 grid gap-3">
-                        <input
-                          type="text"
-                          placeholder="Full name"
-                          value={emailPassword.name}
-                          onChange={(event) =>
-                            setEmailPassword((prev) => ({
-                              ...prev,
-                              name: event.target.value,
-                            }))
-                          }
-                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                        />
-                        <input
-                          type="email"
-                          placeholder="Email address"
-                          value={emailPassword.email}
-                          onChange={(event) =>
-                            setEmailPassword((prev) => ({
-                              ...prev,
-                              email: event.target.value,
-                            }))
-                          }
-                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                        />
-                        <input
-                          type="password"
-                          placeholder="Password"
-                          value={emailPassword.password}
-                          onChange={(event) =>
-                            setEmailPassword((prev) => ({
-                              ...prev,
-                              password: event.target.value,
-                            }))
-                          }
-                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                        />
-                        <input
-                          type="password"
-                          placeholder="Confirm password"
-                          value={emailPassword.confirmPassword}
-                          onChange={(event) =>
-                            setEmailPassword((prev) => ({
-                              ...prev,
-                              confirmPassword: event.target.value,
-                            }))
-                          }
-                          className="w-full rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
-                        />
-                        <button
-                          onClick={signUpWithEmail}
-                          disabled={
-                            isLoading ||
-                            emailPassword.email.length === 0 ||
-                            emailPassword.password.length === 0 ||
-                            emailPassword.confirmPassword.length === 0
-                          }
-                          className="inline-flex w-full items-center justify-center rounded-full bg-amber-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-950 hover:bg-amber-200 disabled:opacity-60"
-                        >
-                          Create account
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {emailPasswordError ? (
-                    <div className="mt-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-200">
-                      {emailPasswordError}
-                    </div>
-                  ) : null}
-                </div>
-
-                <p className="mt-6 text-xs text-slate-500">
-                  By continuing, you agree to keep rehearsal drama onstage.
-                </p>
+            {emailPasswordError ? (
+              <div className="mt-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {emailPasswordError}
               </div>
+            ) : null}
+          </div>
 
-              <div className="mx-auto mt-6 w-full max-w-md text-center text-xs text-slate-500">
-                <span className="text-slate-400">StageSuite</span> · Final Year Project
-              </div>
+          <form
+            onSubmit={handleSsoSubmit}
+            className="mt-4 rounded-2xl border border-slate-800/80 bg-slate-950/60 p-4"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Organisation SSO
+            </p>
+
+            <div className="mt-4 grid gap-3">
+              <label className="grid gap-2 text-sm text-slate-200">
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  Work email
+                </span>
+                <input
+                  type="email"
+                  placeholder="you@organisation.org"
+                  value={ssoEmail}
+                  onChange={(event) => setSsoEmail(event.target.value)}
+                  className={fieldClassName}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={isSsoDisabled}
+                className={`inline-flex w-full items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+                  isSsoDisabled
+                    ? "bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed"
+                    : "bg-amber-300 text-slate-950 hover:bg-amber-200"
+                }`}
+              >
+                {isLoading ? "Checking..." : "Sign in with SSO"}
+              </button>
             </div>
-          </aside>
-        </div>
+
+            {ssoError ? (
+              <div className="mt-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {ssoError}
+              </div>
+            ) : null}
+          </form>
+
+          <div className="mt-4 rounded-2xl border border-slate-800/70 bg-slate-950/40 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Other
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {secondaryProviders.map((provider) => (
+                <button
+                  key={provider.label}
+                  type="button"
+                  onClick={provider.onClick}
+                  disabled={isLoading}
+                  className={secondaryButtonClassName}
+                >
+                  {provider.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <p className="mt-4 text-xs text-slate-500">
+            If you do not belong to an organisation yet, you will be taken through
+            onboarding after sign-in.
+          </p>
+        </section>
       </div>
     </main>
   );

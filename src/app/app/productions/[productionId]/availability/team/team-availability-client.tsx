@@ -59,7 +59,7 @@ export default function TeamAvailabilityClient({
       const payload = (await response.json()) as TeamPayload & { error?: string };
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Unable to load team conflicts.");
+        throw new Error(payload.error ?? "Unable to load cast and crew conflicts.");
       }
 
       setData(payload);
@@ -145,7 +145,9 @@ export default function TeamAvailabilityClient({
         </div>
 
         {isLoading ? (
-          <div className="mt-4 text-sm text-slate-300">Loading team conflicts...</div>
+          <div className="mt-4 text-sm text-slate-300">
+            Loading cast and crew conflicts...
+          </div>
         ) : null}
 
         {error ? (
