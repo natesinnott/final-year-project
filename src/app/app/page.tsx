@@ -231,16 +231,14 @@ export default async function HomePage({
           description: "Build, review, and publish rehearsal blocks.",
         }
       : null,
-  ].filter((link): link is DashboardLink => Boolean(link));
-  const productionManagementLinks: DashboardLink[] = canManageProduction
-    ? [
-        {
+    canManageProduction
+      ? {
           href: `/app/productions/${productionId}/settings`,
           label: "Production settings",
           description: "Manage members, permissions, and production details.",
-        },
-      ]
-    : [];
+        }
+      : null,
+  ].filter((link): link is DashboardLink => Boolean(link));
 
   const availabilityCompleteness = canAccessScheduling
     ? await getAvailabilityCompleteness(productionId)
@@ -249,16 +247,16 @@ export default async function HomePage({
   return (
     <main className="min-h-dvh bg-slate-950 p-6 text-slate-100">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-        <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm backdrop-blur">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-sm backdrop-blur sm:p-6">
+  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
                 StageSuite
               </p>
-              <h1 className="mt-3 text-3xl font-semibold text-white">
+              <h1 className="mt-2 text-3xl font-semibold text-white sm:text-4x1">
                 Welcome back, {session.user?.name ?? "artist"}.
               </h1>
-              <p className="mt-3 text-sm text-slate-300">
+              <p className="mt-2 text-sm text-slate-300">
                 Signed in to{" "}
                 {membership.organisation?.name ?? "No organisation selected"} as{" "}
                 {formatEnumLabel(membership.role ?? "MEMBER")}.
@@ -302,7 +300,7 @@ export default async function HomePage({
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
               Current production
             </p>
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="text-2xl font-semibold text-white">{production.name}</h2>
                 <p className="mt-1 text-sm text-slate-300">
@@ -311,11 +309,6 @@ export default async function HomePage({
                 <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
                   Your production role: {formatEnumLabel(productionMembership.role)}
                 </p>
-              </div>
-              <div className="rounded-full border border-slate-700/80 bg-slate-950/40 px-3 py-1 text-xs font-medium text-slate-300">
-                {hasMultipleProductions
-                  ? `${productionMemberships.length} productions available`
-                  : "Only production assigned to you"}
               </div>
             </div>
           </div>
@@ -345,55 +338,26 @@ export default async function HomePage({
           aria-label="Production tools"
           className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-sm"
         >
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="flex-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Production tools
-              </p>
-              <p className="mt-1 text-sm text-slate-400">
-                Open the part of StageSuite you need for this production.
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                {productionWorkspaceLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="rounded-xl border border-slate-700/70 bg-slate-950/30 px-4 py-3 text-left transition hover:border-slate-500"
-                  >
-                    <span className="block text-sm font-semibold text-slate-100">
-                      {link.label}
-                    </span>
-                    <span className="mt-1 block text-xs leading-relaxed text-slate-400">
-                      {link.description}
-                    </span>
-                  </Link>
-                ))}
-              </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Production tools
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-5">
+              {productionWorkspaceLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="rounded-xl border border-slate-700/70 bg-slate-950/30 px-4 py-3 text-left transition hover:border-slate-500"
+                >
+                  <span className="block text-sm font-semibold text-slate-100">
+                    {link.label}
+                  </span>
+                  <span className="mt-1 block text-xs leading-relaxed text-slate-400">
+                    {link.description}
+                  </span>
+                </Link>
+              ))}
             </div>
-
-            {productionManagementLinks.length > 0 ? (
-              <div className="xl:w-72">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Manage production
-                </p>
-                <div className="mt-3 grid gap-2">
-                  {productionManagementLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      className="rounded-xl border border-slate-700/70 bg-slate-950/30 px-4 py-3 text-left transition hover:border-slate-500"
-                    >
-                      <span className="block text-sm font-semibold text-slate-100">
-                        {link.label}
-                      </span>
-                      <span className="mt-1 block text-xs leading-relaxed text-slate-400">
-                        {link.description}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </div>
         </nav>
 
