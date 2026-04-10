@@ -998,13 +998,6 @@ export default function ScheduleClient({
 
           <div className="flex flex-wrap items-center gap-3">
             <button
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500 disabled:opacity-60"
-              onClick={loadScheduleData}
-              disabled={completenessLoading}
-            >
-              {completenessLoading ? "Refreshing..." : "Refresh data"}
-            </button>
-            <button
               className="rounded-xl bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
               onClick={handleRunSolve}
               disabled={solveBlocked}

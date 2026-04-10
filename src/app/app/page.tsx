@@ -329,13 +329,7 @@ export default async function HomePage({
             </div>
 
             <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-sm sm:p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Available productions
-              </p>
-              <h2 className="mt-2 text-base font-semibold text-white">
-                Open another production
-              </h2>
-              <div className="mt-3">
+              <div>
                 <ProductionSwitcher
                   currentProductionId={productionId}
                   productions={accessibleProductions}
