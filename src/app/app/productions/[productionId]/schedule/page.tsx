@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessProductionScheduling } from "@/lib/scheduler-access";
 import { getTeamAvailabilitySnapshot } from "@/lib/availability";
+import { getSchedulingDraftState } from "@/lib/scheduling-draft-store";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import ScheduleClient from "./schedule-client";
@@ -49,7 +50,21 @@ export default async function ProductionSchedulePage({
     redirect(`/app?productionId=${production.id}`);
   }
 
-  const teamSnapshot = await getTeamAvailabilitySnapshot(production.id);
+  const [teamSnapshot, initialDraft] = await Promise.all([
+    getTeamAvailabilitySnapshot(production.id),
+    getSchedulingDraftState({
+      productionId: production.id,
+      userId,
+    }).catch((error) => {
+      console.error("Unable to load scheduling draft.", {
+        productionId: production.id,
+        userId,
+        error,
+      });
+
+      return null;
+    }),
+  ]);
 
   return (
     <main className="min-h-dvh bg-slate-950 text-slate-100 p-6">
@@ -112,6 +127,7 @@ export default async function ProductionSchedulePage({
           }
           initialTimeZone={production.timeZone}
           initialMembers={teamSnapshot.members}
+          initialDraft={initialDraft}
           initialCompleteness={{
             is_complete: teamSnapshot.completeness.isComplete,
             total_members: teamSnapshot.completeness.totalMembers,

@@ -89,6 +89,7 @@ model User {
   createdRehearsalAttendance  RehearsalAttendance[]     @relation("RehearsalAttendanceCreatedBy")
   updatedRehearsalAttendance  RehearsalAttendance[]     @relation("RehearsalAttendanceUpdatedBy")
   rehearsalAttendanceAudits   RehearsalAttendanceAudit[] @relation("RehearsalAttendanceAuditActor")
+  schedulingDrafts            SchedulingDraft[]
 
   @@unique([email])
   @@map("user")
@@ -266,8 +267,29 @@ model Production {
   availability     AvailabilityWindow[]
   rehearsals       ProductionRehearsal[]
   attendanceAudits RehearsalAttendanceAudit[]
+  schedulingDrafts SchedulingDraft[]
 
   @@index([organisationId])
+}
+
+model SchedulingDraft {
+  id               String   @id @default(cuid())
+  selectedTimeZone String
+  horizonStart     String
+  horizonEnd       String
+  blocks           Json
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  productionId String
+  userId       String
+
+  production Production @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([productionId, userId])
+  @@index([productionId, updatedAt])
+  @@index([userId])
 }
 
 model ProductionMember {

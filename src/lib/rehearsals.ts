@@ -112,6 +112,7 @@ export async function publishProductionRehearsals({
   horizonStart,
   horizonEnd,
   rehearsals,
+  clearSchedulingDrafts = false,
 }: {
   productionId: string;
   createdById: string;
@@ -121,6 +122,7 @@ export async function publishProductionRehearsals({
   horizonStart: Date;
   horizonEnd: Date;
   rehearsals: PersistedRehearsalInput[];
+  clearSchedulingDrafts?: boolean;
 }) {
   return prisma.$transaction(async (tx) => {
     const production = await tx.production.findUnique({
@@ -305,6 +307,14 @@ export async function publishProductionRehearsals({
       await tx.productionRehearsal.delete({
         where: {
           id: rehearsal.id,
+        },
+      });
+    }
+
+    if (clearSchedulingDrafts) {
+      await tx.schedulingDraft.deleteMany({
+        where: {
+          productionId,
         },
       });
     }

@@ -47,7 +47,7 @@ const stats = [
 ];
 
 export const metadata = {
-  title: "StageSuite | Production management for theatres",
+  title: "StageSuite | Theatre production management",
 };
 
 export default function MarketingPage() {
@@ -282,7 +282,7 @@ export default function MarketingPage() {
                 Early access
               </div>
               <div className="mt-3 text-3xl font-semibold text-white">
-                £0
+                $0
                 <span className="text-base font-medium text-slate-400">
                   /production
                 </span>

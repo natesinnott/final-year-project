@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
 import type { TeamAvailabilityMember } from "@/lib/availability";
 import {
   CURATED_TIME_ZONES,
@@ -21,6 +21,12 @@ import {
   type ScheduleBuilderBlock,
   type SolverPrecedence,
 } from "@/lib/scheduling";
+import {
+  buildSchedulingDraftSignature,
+  type SchedulingDraftBlock,
+  type SchedulingDraftState,
+} from "@/lib/scheduling-draft";
+import { useSchedulerWarmup } from "@/lib/useSchedulerWarmup";
 import { useBrowserDateTime } from "@/lib/useBrowserDateTime";
 
 type ScheduleClientProps = {
@@ -29,6 +35,7 @@ type ScheduleClientProps = {
   initialHorizonEnd: string | null;
   initialTimeZone: string | null;
   initialMembers: TeamAvailabilityMember[];
+  initialDraft: SchedulingDraftState | null;
   initialCompleteness: CompletenessPayload;
 };
 
@@ -66,13 +73,7 @@ type TeamPayload = {
   completeness: CompletenessPayload;
 };
 
-type BlockDraft = {
-  clientId: string;
-  label: string;
-  durationMinutes: string;
-  requiredPeopleIds: string[];
-  predecessorBlockIds: string[];
-};
+type BlockDraft = SchedulingDraftBlock;
 
 type SolvedPlanSnapshot = {
   horizonStart: string;
@@ -93,6 +94,7 @@ const SOLVER_RESULT_STATUSES = new Set([
 ]);
 const PUBLISHABLE_SOLVER_STATUSES = new Set(["OPTIMAL", "FEASIBLE"]);
 const TIMEZONE_STORAGE_KEY = "stagesuite.schedule-timezone";
+const DRAFT_SAVE_DEBOUNCE_MS = 800;
 
 function generateClientId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -374,33 +376,42 @@ export default function ScheduleClient({
   initialHorizonEnd,
   initialTimeZone,
   initialMembers,
+  initialDraft,
   initialCompleteness,
 }: ScheduleClientProps) {
   const dateTime = useBrowserDateTime();
+  const schedulerWarmup = useSchedulerWarmup(productionId);
   const detectedTimeZone = useMemo(() => detectSystemTimeZone(), []);
   const hasLockedTimeZone = Boolean(
     initialTimeZone && isValidTimeZone(initialTimeZone)
   );
-  const [selectedTimeZone, setSelectedTimeZone] = useState(
-    hasLockedTimeZone && initialTimeZone ? initialTimeZone : "UTC"
+  const [selectedTimeZone, setSelectedTimeZone] = useState(() =>
+    hasLockedTimeZone && initialTimeZone
+      ? initialTimeZone
+      : initialDraft?.selectedTimeZone ?? "UTC"
   );
-  const [timeZoneReady, setTimeZoneReady] = useState(hasLockedTimeZone);
+  const [timeZoneReady, setTimeZoneReady] = useState(
+    hasLockedTimeZone || Boolean(initialDraft?.selectedTimeZone)
+  );
   const timezoneOptions = useMemo(() => {
     return Array.from(new Set([detectedTimeZone, "UTC", ...CURATED_TIME_ZONES]));
   }, [detectedTimeZone]);
 
   const [members, setMembers] = useState(initialMembers);
-  const [healthLoading, setHealthLoading] = useState(true);
-  const [healthOk, setHealthOk] = useState<boolean | null>(null);
-  const [healthMessage, setHealthMessage] = useState<string | null>(null);
 
   const [completenessLoading, setCompletenessLoading] = useState(false);
   const [completenessError, setCompletenessError] = useState<string | null>(null);
   const [completeness, setCompleteness] = useState(initialCompleteness);
 
-  const [horizonStart, setHorizonStart] = useState("");
-  const [horizonEnd, setHorizonEnd] = useState("");
-  const [blocks, setBlocks] = useState<BlockDraft[]>([createEmptyBlock()]);
+  const [horizonStart, setHorizonStart] = useState(initialDraft?.horizonStart ?? "");
+  const [horizonEnd, setHorizonEnd] = useState(initialDraft?.horizonEnd ?? "");
+  const [blocks, setBlocks] = useState<BlockDraft[]>(
+    initialDraft?.blocks ?? [createEmptyBlock()]
+  );
+  const [hasUserEditedDraft, setHasUserEditedDraft] = useState(false);
+  const [lastPersistedDraftSignature, setLastPersistedDraftSignature] = useState(() =>
+    buildSchedulingDraftSignature(initialDraft)
+  );
 
   const [isRunning, setIsRunning] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -423,6 +434,12 @@ export default function ScheduleClient({
       return;
     }
 
+    if (initialDraft?.selectedTimeZone) {
+      setSelectedTimeZone(initialDraft.selectedTimeZone);
+      setTimeZoneReady(true);
+      return;
+    }
+
     const fromStorage =
       typeof window !== "undefined"
         ? window.localStorage.getItem(TIMEZONE_STORAGE_KEY)
@@ -432,7 +449,7 @@ export default function ScheduleClient({
 
     setSelectedTimeZone(candidate);
     setTimeZoneReady(true);
-  }, [detectedTimeZone, hasLockedTimeZone, initialTimeZone]);
+  }, [detectedTimeZone, hasLockedTimeZone, initialDraft?.selectedTimeZone, initialTimeZone]);
 
   useEffect(() => {
     if (!timeZoneReady) {
@@ -505,46 +522,30 @@ export default function ScheduleClient({
   }, [productionId]);
 
   useEffect(() => {
-    let isActive = true;
-
-    async function checkHealth() {
-      setHealthLoading(true);
-      setHealthMessage(null);
-
-      try {
-        const response = await fetch(
-          `/api/scheduler/health?productionId=${encodeURIComponent(productionId)}`,
-          { cache: "no-store" }
-        );
-        const body = await parseResponseJson(response);
-
-        if (!isActive) {
-          return;
-        }
-
-        setHealthOk(response.ok);
-        setHealthMessage(response.ok ? null : getErrorMessage(body, "Health check failed."));
-      } catch {
-        if (!isActive) {
-          return;
-        }
-
-        setHealthOk(false);
-        setHealthMessage("Unable to reach scheduler health endpoint.");
-      } finally {
-        if (isActive) {
-          setHealthLoading(false);
-        }
-      }
-    }
-
-    checkHealth();
     loadScheduleData();
+  }, [loadScheduleData]);
 
-    return () => {
-      isActive = false;
-    };
-  }, [loadScheduleData, productionId]);
+  const persistDraft = useCallback(
+    async (draft: SchedulingDraftState, keepalive = false) => {
+      const response = await fetch(
+        `/api/productions/${encodeURIComponent(productionId)}/schedule-draft`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(draft),
+          keepalive,
+        }
+      );
+      const body = await parseResponseJson(response);
+
+      if (!response.ok) {
+        throw new Error(getErrorMessage(body, "Unable to save scheduling draft."));
+      }
+    },
+    [productionId]
+  );
 
   async function pollJobUntilComplete(currentJobId: string) {
     const maxAttempts = 30;
@@ -647,6 +648,22 @@ export default function ScheduleClient({
       ),
     [solvedPlanSnapshot]
   );
+  const currentDraft = useMemo<SchedulingDraftState | null>(
+    () =>
+      timeZoneReady
+        ? {
+            selectedTimeZone,
+            horizonStart,
+            horizonEnd,
+            blocks,
+          }
+        : null,
+    [blocks, horizonEnd, horizonStart, selectedTimeZone, timeZoneReady]
+  );
+  const currentDraftSignature = useMemo(
+    () => buildSchedulingDraftSignature(currentDraft),
+    [currentDraft]
+  );
   const canPublish =
     timeZoneReady &&
     !isPublishing &&
@@ -654,12 +671,74 @@ export default function ScheduleClient({
     Boolean(solveResult?.status && PUBLISHABLE_SOLVER_STATUSES.has(solveResult.status)) &&
     placementCount > 0;
   const solveBlocked =
+    !schedulerWarmup.isReady ||
     !timeZoneReady ||
     isRunning ||
     completenessLoading ||
     !completeness.is_complete ||
     !isFormValid ||
     !generatedPayload;
+  const flushDraftOnPageHide = useEffectEvent(() => {
+    if (
+      !timeZoneReady ||
+      !currentDraft ||
+      !hasUserEditedDraft ||
+      currentDraftSignature === lastPersistedDraftSignature
+    ) {
+      return;
+    }
+
+    void persistDraft(currentDraft, true).catch(() => {
+      // Ignore pagehide persistence failures so navigation still completes.
+    });
+  });
+
+  useEffect(() => {
+    if (
+      !timeZoneReady ||
+      !currentDraft ||
+      !hasUserEditedDraft ||
+      currentDraftSignature === lastPersistedDraftSignature
+    ) {
+      return;
+    }
+
+    let isActive = true;
+    const draftToPersist = currentDraft;
+    const timeoutId = window.setTimeout(() => {
+      void persistDraft(draftToPersist)
+        .then(() => {
+          if (isActive) {
+            setLastPersistedDraftSignature(currentDraftSignature);
+          }
+        })
+        .catch((error) => {
+          if (isActive) {
+            console.error("Unable to save scheduling draft.", error);
+          }
+        });
+    }, DRAFT_SAVE_DEBOUNCE_MS);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    currentDraft,
+    currentDraftSignature,
+    hasUserEditedDraft,
+    lastPersistedDraftSignature,
+    persistDraft,
+    timeZoneReady,
+  ]);
+
+  useEffect(() => {
+    window.addEventListener("pagehide", flushDraftOnPageHide);
+
+    return () => {
+      window.removeEventListener("pagehide", flushDraftOnPageHide);
+    };
+  }, []);
 
   async function handleRunSolve() {
     setIsRunning(true);
@@ -828,6 +907,8 @@ export default function ScheduleClient({
           ? "Published 1 rehearsal."
           : `Published ${createdCount} rehearsals.`
       );
+      setHasUserEditedDraft(false);
+      setLastPersistedDraftSignature(buildSchedulingDraftSignature(null));
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Unexpected publish error."
@@ -837,7 +918,12 @@ export default function ScheduleClient({
     }
   }
 
+  function markDraftEdited() {
+    setHasUserEditedDraft(true);
+  }
+
   function updateBlock(clientId: string, updates: Partial<BlockDraft>) {
+    markDraftEdited();
     setBlocks((current) =>
       current.map((block) =>
         block.clientId === clientId ? { ...block, ...updates } : block
@@ -846,6 +932,7 @@ export default function ScheduleClient({
   }
 
   function toggleRequiredPerson(clientId: string, userId: string) {
+    markDraftEdited();
     setBlocks((current) =>
       current.map((block) => {
         if (block.clientId !== clientId) {
@@ -863,6 +950,7 @@ export default function ScheduleClient({
   }
 
   function togglePredecessor(clientId: string, predecessorBlockId: string) {
+    markDraftEdited();
     setBlocks((current) =>
       current.map((block) => {
         if (block.clientId !== clientId) {
@@ -880,6 +968,7 @@ export default function ScheduleClient({
   }
 
   function deleteBlock(clientId: string) {
+    markDraftEdited();
     setBlocks((current) =>
       current
         .filter((block) => block.clientId !== clientId)
@@ -920,7 +1009,7 @@ export default function ScheduleClient({
               onClick={handleRunSolve}
               disabled={solveBlocked}
             >
-              {isRunning ? "Running..." : "Run solve"}
+              {schedulerWarmup.buttonLabel}
             </button>
             <button
               className="rounded-xl border border-emerald-400/60 px-4 py-2 text-sm font-semibold text-emerald-100 disabled:opacity-60"
@@ -985,6 +1074,7 @@ export default function ScheduleClient({
                   value={selectedTimeZone}
                   disabled={hasLockedTimeZone}
                   onChange={(event) => {
+                    markDraftEdited();
                     const nextTimeZone = event.target.value;
                     setHorizonStart((current) =>
                       current
@@ -1034,7 +1124,10 @@ export default function ScheduleClient({
                   className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
                   value={horizonStart}
                   disabled={!timeZoneReady}
-                  onChange={(event) => setHorizonStart(event.target.value)}
+                  onChange={(event) => {
+                    markDraftEdited();
+                    setHorizonStart(event.target.value);
+                  }}
                 />
               </label>
               <label className="grid gap-2 text-sm text-slate-300">
@@ -1045,7 +1138,10 @@ export default function ScheduleClient({
                   className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
                   value={horizonEnd}
                   disabled={!timeZoneReady}
-                  onChange={(event) => setHorizonEnd(event.target.value)}
+                  onChange={(event) => {
+                    markDraftEdited();
+                    setHorizonEnd(event.target.value);
+                  }}
                 />
               </label>
             </div>
@@ -1073,7 +1169,10 @@ export default function ScheduleClient({
               </div>
               <button
                 className="rounded-xl border border-amber-300/60 px-4 py-2 text-sm font-semibold text-amber-100 hover:border-amber-200"
-                onClick={() => setBlocks((current) => [...current, createEmptyBlock()])}
+                onClick={() => {
+                  markDraftEdited();
+                  setBlocks((current) => [...current, createEmptyBlock()]);
+                }}
               >
                 Add block
               </button>
@@ -1314,34 +1413,6 @@ export default function ScheduleClient({
                 </ul>
               </div>
             )}
-          </section>
-
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-              Solver health
-            </p>
-            <h3 className="mt-2 text-lg font-semibold text-white">Service status</h3>
-
-            <div
-              className={`mt-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
-                healthOk
-                  ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200"
-                  : "border-rose-400/40 bg-rose-500/15 text-rose-200"
-              }`}
-            >
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  healthOk ? "bg-emerald-300" : "bg-rose-300"
-                }`}
-              />
-              {healthLoading ? "Checking" : healthOk ? "Healthy" : "Unhealthy"}
-            </div>
-
-            {healthMessage ? (
-              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
-                {healthMessage}
-              </div>
-            ) : null}
           </section>
 
           <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">

@@ -207,6 +207,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       horizonStart,
       horizonEnd,
       rehearsals: rehearsalsToCreate,
+      clearSchedulingDrafts: true,
     });
   } catch (error) {
     return NextResponse.json(
