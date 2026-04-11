@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { canAccessProduction } from "@/lib/scheduler-access";
+import { getProductionMemberContext } from "@/lib/scheduler-access";
 import AvailabilityClient from "./availability-client";
 
 export const metadata = {
@@ -37,10 +37,15 @@ export default async function ProductionAvailabilityPage({
     redirect("/app/productions");
   }
 
-  const isMember = await canAccessProduction(userId, productionId);
-  if (!isMember) {
+  const memberContext = await getProductionMemberContext(userId, productionId);
+  if (!memberContext?.isProductionMember) {
     redirect("/app/productions");
   }
+
+  const canAccessScheduling = Boolean(
+    memberContext.productionMemberRole &&
+      memberContext.directorRoles.includes(memberContext.productionMemberRole)
+  );
 
   return (
     <main className="min-h-dvh bg-slate-950 text-slate-100 p-6">
@@ -65,12 +70,14 @@ export default async function ProductionAvailabilityPage({
               >
                 Back to dashboard
               </a>
-              <a
-                href={`/app/productions/${production.id}/schedule`}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                Scheduling
-              </a>
+              {canAccessScheduling ? (
+                <a
+                  href={`/app/productions/${production.id}/schedule`}
+                  className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
+                >
+                  Scheduling
+                </a>
+              ) : null}
             </div>
           </div>
         </header>
