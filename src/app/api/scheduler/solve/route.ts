@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { canAccessProductionScheduling } from "@/lib/scheduler-access";
 import { getAvailabilityCompleteness } from "@/lib/availability";
-import { validateSolverPrecedences, type SolverPrecedence } from "@/lib/scheduling";
+import {
+  normalizeAllowedTimeWindowInput,
+  normalizeSolverTimeZoneInput,
+  validateSolverPrecedences,
+  type SolverPrecedence,
+} from "@/lib/scheduling";
 
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -72,31 +77,64 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (payload && typeof payload === "object") {
-    const candidate = payload as {
-      blocks?: Array<{ id?: unknown }>;
-      precedences?: SolverPrecedence[];
-    };
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return NextResponse.json(
+      { error: "Solver payload must be a JSON object." },
+      { status: 400 }
+    );
+  }
 
-    if (Array.isArray(candidate.precedences)) {
-      const blockIds = Array.isArray(candidate.blocks)
-        ? candidate.blocks
-            .map((block) => (typeof block?.id === "string" ? block.id : null))
-            .filter((id): id is string => Boolean(id))
-        : [];
-      const precedenceErrors = validateSolverPrecedences({
-        blockIds,
-        precedences: candidate.precedences,
-      });
+  const candidate = payload as {
+    blocks?: Array<{ id?: unknown }>;
+    precedences?: SolverPrecedence[];
+    allowed_time_window?: unknown;
+    time_zone?: unknown;
+  };
+  const { allowedTimeWindow, error: allowedTimeWindowError } =
+    normalizeAllowedTimeWindowInput(candidate.allowed_time_window);
 
-      if (precedenceErrors.length > 0) {
-        return NextResponse.json(
-          { error: precedenceErrors.join(" ") },
-          { status: 400 }
-        );
-      }
+  if (!allowedTimeWindow || allowedTimeWindowError) {
+    return NextResponse.json(
+      { error: allowedTimeWindowError ?? "Invalid allowed_time_window." },
+      { status: 400 }
+    );
+  }
+
+  const { timeZone, error: timeZoneError } = normalizeSolverTimeZoneInput(
+    candidate.time_zone
+  );
+
+  if (!timeZone || timeZoneError) {
+    return NextResponse.json(
+      { error: timeZoneError ?? "Invalid time_zone." },
+      { status: 400 }
+    );
+  }
+
+  if (Array.isArray(candidate.precedences)) {
+    const blockIds = Array.isArray(candidate.blocks)
+      ? candidate.blocks
+          .map((block) => (typeof block?.id === "string" ? block.id : null))
+          .filter((id): id is string => Boolean(id))
+      : [];
+    const precedenceErrors = validateSolverPrecedences({
+      blockIds,
+      precedences: candidate.precedences,
+    });
+
+    if (precedenceErrors.length > 0) {
+      return NextResponse.json(
+        { error: precedenceErrors.join(" ") },
+        { status: 400 }
+      );
     }
   }
+
+  const normalizedPayload = {
+    ...candidate,
+    allowed_time_window: allowedTimeWindow,
+    time_zone: timeZone,
+  };
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -108,7 +146,7 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
         "x-api-key": config.apiKey,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(normalizedPayload),
       signal: controller.signal,
       cache: "no-store",
     });

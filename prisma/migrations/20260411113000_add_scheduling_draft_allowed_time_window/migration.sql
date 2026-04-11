@@ -1,0 +1,3 @@
+ALTER TABLE "SchedulingDraft"
+ADD COLUMN "allowedStartTime" TEXT NOT NULL DEFAULT '08:00',
+ADD COLUMN "allowedEndTime" TEXT NOT NULL DEFAULT '23:30';

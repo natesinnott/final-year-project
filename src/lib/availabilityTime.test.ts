@@ -5,7 +5,7 @@ import {
   utcToDateTimeInputValue,
   utcToZoned,
   zonedToUtc,
-} from "./availabilityTime";
+} from "./availabilityTime.ts";
 
 const TZ = "America/New_York";
 

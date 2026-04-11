@@ -13,9 +13,12 @@ import {
 import {
   buildSolverBlockId,
   buildSolverPayload,
+  DEFAULT_ALLOWED_REHEARSAL_END_TIME,
+  DEFAULT_ALLOWED_REHEARSAL_START_TIME,
   DEFAULT_SCHEDULER_ROOM_ID,
   DEFAULT_SCHEDULER_ROOM_NAME,
   SCHEDULER_TIME_GRANULARITY_MINUTES,
+  validateAllowedTimeWindow,
   validateSolverPrecedences,
   wouldCreateDependencyCycle,
   type ScheduleBuilderBlock,
@@ -405,6 +408,12 @@ export default function ScheduleClient({
 
   const [horizonStart, setHorizonStart] = useState(initialDraft?.horizonStart ?? "");
   const [horizonEnd, setHorizonEnd] = useState(initialDraft?.horizonEnd ?? "");
+  const [allowedStartTime, setAllowedStartTime] = useState(
+    initialDraft?.allowedStartTime ?? DEFAULT_ALLOWED_REHEARSAL_START_TIME
+  );
+  const [allowedEndTime, setAllowedEndTime] = useState(
+    initialDraft?.allowedEndTime ?? DEFAULT_ALLOWED_REHEARSAL_END_TIME
+  );
   const [blocks, setBlocks] = useState<BlockDraft[]>(
     initialDraft?.blocks ?? [createEmptyBlock()]
   );
@@ -596,6 +605,14 @@ export default function ScheduleClient({
     () => validateHorizon(horizonStart, horizonEnd, selectedTimeZone),
     [horizonEnd, horizonStart, selectedTimeZone]
   );
+  const allowedTimeWindowErrors = useMemo(
+    () =>
+      validateAllowedTimeWindow({
+        startLocalTime: allowedStartTime,
+        endLocalTime: allowedEndTime,
+      }),
+    [allowedEndTime, allowedStartTime]
+  );
   const blockErrors = useMemo(
     () =>
       Object.fromEntries(blocks.map((block) => [block.clientId, validateBlock(block)])) as Record<
@@ -623,6 +640,7 @@ export default function ScheduleClient({
   const hasNoBlocks = blocks.length === 0;
   const isFormValid =
     horizonErrors.length === 0 &&
+    allowedTimeWindowErrors.length === 0 &&
     dependencyErrors.length === 0 &&
     !hasNoBlocks &&
     !hasInvalidBlocks;
@@ -633,11 +651,22 @@ export default function ScheduleClient({
             horizonStart,
             horizonEnd,
             timeZone: selectedTimeZone,
+            allowedStartTime,
+            allowedEndTime,
             blocks: normalizedBlocks,
             members,
           })
         : null,
-    [horizonEnd, horizonStart, isFormValid, members, normalizedBlocks, selectedTimeZone]
+    [
+      allowedEndTime,
+      allowedStartTime,
+      horizonEnd,
+      horizonStart,
+      isFormValid,
+      members,
+      normalizedBlocks,
+      selectedTimeZone,
+    ]
   );
   const placements = useMemo(() => solveResult?.placements ?? [], [solveResult]);
   const placementCount = placements.length;
@@ -655,10 +684,20 @@ export default function ScheduleClient({
             selectedTimeZone,
             horizonStart,
             horizonEnd,
+            allowedStartTime,
+            allowedEndTime,
             blocks,
           }
         : null,
-    [blocks, horizonEnd, horizonStart, selectedTimeZone, timeZoneReady]
+    [
+      allowedEndTime,
+      allowedStartTime,
+      blocks,
+      horizonEnd,
+      horizonStart,
+      selectedTimeZone,
+      timeZoneReady,
+    ]
   );
   const currentDraftSignature = useMemo(
     () => buildSchedulingDraftSignature(currentDraft),
@@ -767,7 +806,9 @@ export default function ScheduleClient({
     }
 
     if (!generatedPayload) {
-      setErrorMessage("Resolve the horizon, block, and dependency validation errors first.");
+      setErrorMessage(
+        "Resolve the horizon, rehearsal-hour, block, and dependency validation errors first."
+      );
       setIsRunning(false);
       return;
     }
@@ -1055,10 +1096,6 @@ export default function ScheduleClient({
               Horizon
             </p>
             <h3 className="mt-2 text-lg font-semibold text-white">Scheduling window</h3>
-            <p className="mt-2 text-sm text-slate-300">
-              Choose the solve horizon in {SCHEDULER_TIME_GRANULARITY_MINUTES}-minute increments.
-            </p>
-
             <div className="mt-4 grid gap-3 md:grid-cols-[1.1fr_1.9fr]">
               <label className="grid gap-2 text-sm text-slate-300">
                 <span className="font-medium text-white">Scheduling time zone</span>
@@ -1100,12 +1137,6 @@ export default function ScheduleClient({
                   ))}
                 </select>
               </label>
-
-              <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-                {hasLockedTimeZone
-                  ? `Published rehearsals are locked to ${selectedTimeZone}.`
-                  : `Publishing will permanently lock this production to ${selectedTimeZone} until the future schedule is discarded and regenerated.`}
-              </div>
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -1139,9 +1170,48 @@ export default function ScheduleClient({
               </label>
             </div>
 
+            <div className="mt-4 grid gap-2">
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-2 text-sm text-slate-300">
+                  <span className="font-medium text-white">Earliest rehearsal start</span>
+                  <input
+                    type="time"
+                    step={SCHEDULER_TIME_GRANULARITY_MINUTES * 60}
+                    required
+                    className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
+                    value={allowedStartTime}
+                    onChange={(event) => {
+                      markDraftEdited();
+                      setAllowedStartTime(event.target.value);
+                    }}
+                  />
+                </label>
+                <label className="grid gap-2 text-sm text-slate-300">
+                  <span className="font-medium text-white">Latest rehearsal end</span>
+                  <input
+                    type="time"
+                    step={SCHEDULER_TIME_GRANULARITY_MINUTES * 60}
+                    required
+                    className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
+                    value={allowedEndTime}
+                    onChange={(event) => {
+                      markDraftEdited();
+                      setAllowedEndTime(event.target.value);
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+
             {horizonErrors.length > 0 ? (
               <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
                 {horizonErrors.join(" ")}
+              </div>
+            ) : null}
+
+            {allowedTimeWindowErrors.length > 0 ? (
+              <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                {allowedTimeWindowErrors.join(" ")}
               </div>
             ) : null}
           </section>
@@ -1155,10 +1225,6 @@ export default function ScheduleClient({
                 <h3 className="mt-2 text-lg font-semibold text-white">
                   Rehearsal blocks and dependencies
                 </h3>
-                <p className="mt-2 text-sm text-slate-300">
-                  Each block uses the synthetic {DEFAULT_SCHEDULER_ROOM_NAME.toLowerCase()} for
-                  this MVP. Dependencies become solver precedence constraints.
-                </p>
               </div>
               <button
                 className="rounded-xl border border-amber-300/60 px-4 py-2 text-sm font-semibold text-amber-100 hover:border-amber-200"

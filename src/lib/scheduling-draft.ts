@@ -1,4 +1,9 @@
-import { isValidTimeZone } from "@/lib/availabilityTime";
+import { isValidTimeZone } from "./availabilityTime.ts";
+import {
+  DEFAULT_ALLOWED_REHEARSAL_END_TIME,
+  DEFAULT_ALLOWED_REHEARSAL_START_TIME,
+  parseLocalTimeToMinutes,
+} from "./scheduling.ts";
 
 export type SchedulingDraftBlock = {
   clientId: string;
@@ -12,6 +17,8 @@ export type SchedulingDraftState = {
   selectedTimeZone: string;
   horizonStart: string;
   horizonEnd: string;
+  allowedStartTime: string;
+  allowedEndTime: string;
   blocks: SchedulingDraftBlock[];
 };
 
@@ -74,6 +81,8 @@ export function normalizeSchedulingDraftState(
     selectedTimeZone?: unknown;
     horizonStart?: unknown;
     horizonEnd?: unknown;
+    allowedStartTime?: unknown;
+    allowedEndTime?: unknown;
     blocks?: unknown;
   };
 
@@ -83,6 +92,26 @@ export function normalizeSchedulingDraftState(
     typeof candidate.horizonStart !== "string" ||
     typeof candidate.horizonEnd !== "string" ||
     !Array.isArray(candidate.blocks)
+  ) {
+    return null;
+  }
+
+  const allowedStartTime =
+    typeof candidate.allowedStartTime === "string"
+      ? candidate.allowedStartTime
+      : DEFAULT_ALLOWED_REHEARSAL_START_TIME;
+  const allowedEndTime =
+    typeof candidate.allowedEndTime === "string"
+      ? candidate.allowedEndTime
+      : DEFAULT_ALLOWED_REHEARSAL_END_TIME;
+
+  const allowedStartMinutes = parseLocalTimeToMinutes(allowedStartTime);
+  const allowedEndMinutes = parseLocalTimeToMinutes(allowedEndTime);
+
+  if (
+    allowedStartMinutes === null ||
+    allowedEndMinutes === null ||
+    allowedStartMinutes >= allowedEndMinutes
   ) {
     return null;
   }
@@ -99,6 +128,8 @@ export function normalizeSchedulingDraftState(
     selectedTimeZone: candidate.selectedTimeZone,
     horizonStart: candidate.horizonStart,
     horizonEnd: candidate.horizonEnd,
+    allowedStartTime,
+    allowedEndTime,
     blocks,
   };
 }

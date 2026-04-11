@@ -277,6 +277,8 @@ model SchedulingDraft {
   selectedTimeZone String
   horizonStart     String
   horizonEnd       String
+  allowedStartTime String   @default("08:00")
+  allowedEndTime   String   @default("23:30")
   blocks           Json
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

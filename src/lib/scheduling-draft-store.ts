@@ -24,6 +24,8 @@ export async function getSchedulingDraftState({
       selectedTimeZone: true,
       horizonStart: true,
       horizonEnd: true,
+      allowedStartTime: true,
+      allowedEndTime: true,
       blocks: true,
     },
   });
@@ -36,6 +38,8 @@ export async function getSchedulingDraftState({
     selectedTimeZone: draft.selectedTimeZone,
     horizonStart: draft.horizonStart,
     horizonEnd: draft.horizonEnd,
+    allowedStartTime: draft.allowedStartTime,
+    allowedEndTime: draft.allowedEndTime,
     blocks: draft.blocks,
   });
 
@@ -80,12 +84,16 @@ export async function upsertSchedulingDraftState({
       selectedTimeZone: normalized.selectedTimeZone,
       horizonStart: normalized.horizonStart,
       horizonEnd: normalized.horizonEnd,
+      allowedStartTime: normalized.allowedStartTime,
+      allowedEndTime: normalized.allowedEndTime,
       blocks: normalized.blocks as Prisma.InputJsonValue,
     },
     update: {
       selectedTimeZone: normalized.selectedTimeZone,
       horizonStart: normalized.horizonStart,
       horizonEnd: normalized.horizonEnd,
+      allowedStartTime: normalized.allowedStartTime,
+      allowedEndTime: normalized.allowedEndTime,
       blocks: normalized.blocks as Prisma.InputJsonValue,
     },
     select: {
