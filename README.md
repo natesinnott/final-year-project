@@ -3,6 +3,9 @@
 StageSuite is a rehearsal operations platform for theatre organisations.  
 It centralises production workflows — scheduling, communication, and coordination — so cast and crew always know what’s happening and when.
 
+> This project is under active development as part of a Final Year Project.  
+> Features, UI, and architecture may change.
+
 ---
 
 ## Overview
@@ -92,3 +95,21 @@ Users interact with production-specific dashboards that surface only what they n
 - **Auth:** Custom auth (Better Auth / NextAuth-style)  
 - **Hosting:** Azure (Container Apps / Static Web Apps)  
 - **CI/CD:** GitHub Actions
+
+---
+
+## Project Context
+
+This project is being developed as a Final Year Project focused on:
+
+- Real-world production workflow design  
+- Role-based systems architecture  
+- AI-assisted scheduling optimisation  
+
+---
+
+## Notes
+
+This is an active project — features and structure are evolving rapidly.
+
+Feedback and ideas are always welcome.
