@@ -7,6 +7,7 @@ import {
   getDefaultAllowedTimeWindow,
   normalizeAllowedTimeWindowInput,
   validateAllowedTimeWindow,
+  validateSolverPayloadWorkload,
   validateSolverPrecedences,
   wouldCreateDependencyCycle,
 } from "./scheduling.ts";
@@ -254,6 +255,88 @@ test("validateSolverPrecedences rejects unknown ids, self references, and cycles
     "Dependencies must reference known block ids.",
     "A block cannot depend on itself.",
     "Dependencies cannot create a circular chain.",
+  ]);
+});
+
+test("validateSolverPayloadWorkload allows large production-sized payloads", () => {
+  const people = Array.from({ length: 30 }, (_, index) => ({
+    id: `person-${index}`,
+    availability_windows: [
+      {
+        start: "2026-03-01T08:00:00.000Z",
+        end: "2026-03-31T22:00:00.000Z",
+      },
+    ],
+  }));
+  const blocks = Array.from({ length: 300 }, (_, index) => ({
+    id: `block-${index}`,
+    duration_minutes: 60,
+    required_people_ids: [`person-${index % people.length}`],
+    fixed_room_id: "room-a",
+  }));
+
+  const errors = validateSolverPayloadWorkload({
+    horizon_start: "2026-03-01T08:00:00.000Z",
+    horizon_end: "2026-03-31T22:00:00.000Z",
+    time_granularity_minutes: 15,
+    blocks,
+    people,
+    rooms: [
+      {
+        id: "room-a",
+        availability_windows: [
+          {
+            start: "2026-03-01T08:00:00.000Z",
+            end: "2026-03-31T22:00:00.000Z",
+          },
+        ],
+      },
+    ],
+    precedences: [],
+  });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateSolverPayloadWorkload rejects abusive payload scale", () => {
+  const errors = validateSolverPayloadWorkload(
+    {
+      horizon_start: "2026-03-01T08:00:00.000Z",
+      horizon_end: "2027-03-01T08:00:00.000Z",
+      blocks: Array.from({ length: 4 }, (_, index) => ({
+        id: `block-${index}`,
+        duration_minutes: 60,
+        required_people_ids: ["p1", "p2", "p3"],
+      })),
+      people: [],
+      rooms: [],
+      precedences: [],
+      constraint_config: {
+        max_solve_seconds: 60,
+      },
+    },
+    {
+      maxBlocks: 3,
+      maxPeople: 10,
+      maxRooms: 2,
+      maxAvailabilityWindows: 20,
+      maxPrecedences: 20,
+      maxRequiredPeoplePerBlock: 2,
+      maxTotalRequiredPeopleReferences: 10,
+      maxAllowedRoomsPerBlock: 2,
+      maxDurationOptionsPerBlock: 2,
+      maxHorizonDays: 30,
+      maxIdLength: 128,
+      maxSolveSeconds: 30,
+    }
+  );
+
+  assert.deepEqual(errors, [
+    "Solver payload cannot include more than 3 blocks.",
+    "Solver horizon cannot be longer than 30 days.",
+    "A block cannot require more than 2 people.",
+    "Solver payload cannot include more than 10 total participant requirements.",
+    "max_solve_seconds cannot be greater than 30.",
   ]);
 });
 

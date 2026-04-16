@@ -2,14 +2,22 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { canAccessProductionScheduling } from "@/lib/scheduler-access";
 import { getAvailabilityCompleteness } from "@/lib/availability";
+import { checkInMemoryRateLimit } from "@/lib/in-memory-rate-limit";
 import {
+  DEFAULT_SOLVER_PAYLOAD_LIMITS,
   normalizeAllowedTimeWindowInput,
   normalizeSolverTimeZoneInput,
+  validateSolverPayloadWorkload,
   validateSolverPrecedences,
+  type SolverPayloadLimits,
   type SolverPrecedence,
 } from "@/lib/scheduling";
 
 const REQUEST_TIMEOUT_MS = 20_000;
+const DEFAULT_MAX_REQUEST_BYTES = 1_000_000;
+const DEFAULT_SOLVE_RATE_LIMIT = 6;
+const DEFAULT_PRODUCTION_SOLVE_RATE_LIMIT = 20;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function getProductionId(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -30,6 +38,89 @@ function getSchedulerConfig() {
   };
 }
 
+function getPositiveInteger(name: string, fallback: number) {
+  const rawValue = process.env[name]?.trim();
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(rawValue, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getSolverPayloadLimits(): SolverPayloadLimits {
+  return {
+    maxBlocks: getPositiveInteger(
+      "SCHEDULER_MAX_BLOCKS",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxBlocks
+    ),
+    maxPeople: getPositiveInteger(
+      "SCHEDULER_MAX_PEOPLE",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxPeople
+    ),
+    maxRooms: getPositiveInteger(
+      "SCHEDULER_MAX_ROOMS",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxRooms
+    ),
+    maxAvailabilityWindows: getPositiveInteger(
+      "SCHEDULER_MAX_AVAILABILITY_WINDOWS",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxAvailabilityWindows
+    ),
+    maxPrecedences: getPositiveInteger(
+      "SCHEDULER_MAX_PRECEDENCES",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxPrecedences
+    ),
+    maxRequiredPeoplePerBlock: getPositiveInteger(
+      "SCHEDULER_MAX_REQUIRED_PEOPLE_PER_BLOCK",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxRequiredPeoplePerBlock
+    ),
+    maxTotalRequiredPeopleReferences: getPositiveInteger(
+      "SCHEDULER_MAX_REQUIRED_PEOPLE_REFERENCES",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxTotalRequiredPeopleReferences
+    ),
+    maxAllowedRoomsPerBlock: getPositiveInteger(
+      "SCHEDULER_MAX_ALLOWED_ROOMS_PER_BLOCK",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxAllowedRoomsPerBlock
+    ),
+    maxDurationOptionsPerBlock: getPositiveInteger(
+      "SCHEDULER_MAX_DURATION_OPTIONS_PER_BLOCK",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxDurationOptionsPerBlock
+    ),
+    maxHorizonDays: getPositiveInteger(
+      "SCHEDULER_MAX_HORIZON_DAYS",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxHorizonDays
+    ),
+    maxIdLength: getPositiveInteger(
+      "SCHEDULER_MAX_ID_LENGTH",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxIdLength
+    ),
+    maxSolveSeconds: getPositiveInteger(
+      "SCHEDULER_MAX_SOLVE_SECONDS",
+      DEFAULT_SOLVER_PAYLOAD_LIMITS.maxSolveSeconds
+    ),
+  };
+}
+
+function getBodySizeLimitBytes() {
+  return getPositiveInteger("SCHEDULER_MAX_REQUEST_BYTES", DEFAULT_MAX_REQUEST_BYTES);
+}
+
+function getJsonBodySize(value: string) {
+  return new TextEncoder().encode(value).length;
+}
+
+function rateLimitExceededResponse(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: "Too many scheduler requests. Try again shortly." },
+    {
+      status: 429,
+      headers: {
+        "Retry-After": String(retryAfterSeconds),
+      },
+    }
+  );
+}
+
 export async function POST(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers });
   const userId = session?.user?.id;
@@ -46,6 +137,30 @@ export async function POST(request: Request) {
   const canAccess = await canAccessProductionScheduling(userId, productionId);
   if (!canAccess) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const userRateLimit = checkInMemoryRateLimit({
+    key: `scheduler:solve:user:${userId}:production:${productionId}`,
+    maxHits: getPositiveInteger(
+      "SCHEDULER_SOLVE_RATE_LIMIT_PER_USER",
+      DEFAULT_SOLVE_RATE_LIMIT
+    ),
+    windowMs: RATE_LIMIT_WINDOW_MS,
+  });
+  if (!userRateLimit.allowed) {
+    return rateLimitExceededResponse(userRateLimit.retryAfterSeconds);
+  }
+
+  const productionRateLimit = checkInMemoryRateLimit({
+    key: `scheduler:solve:production:${productionId}`,
+    maxHits: getPositiveInteger(
+      "SCHEDULER_SOLVE_RATE_LIMIT_PER_PRODUCTION",
+      DEFAULT_PRODUCTION_SOLVE_RATE_LIMIT
+    ),
+    windowMs: RATE_LIMIT_WINDOW_MS,
+  });
+  if (!productionRateLimit.allowed) {
+    return rateLimitExceededResponse(productionRateLimit.retryAfterSeconds);
   }
 
   const completeness = await getAvailabilityCompleteness(productionId);
@@ -71,8 +186,35 @@ export async function POST(request: Request) {
   }
 
   let payload: unknown;
+  const bodySizeLimitBytes = getBodySizeLimitBytes();
+  const contentLength = request.headers.get("content-length");
+  if (
+    contentLength &&
+    Number.isFinite(Number(contentLength)) &&
+    Number(contentLength) > bodySizeLimitBytes
+  ) {
+    return NextResponse.json(
+      { error: `Solver payload cannot be larger than ${bodySizeLimitBytes} bytes.` },
+      { status: 413 }
+    );
+  }
+
+  let rawBody: string;
   try {
-    payload = await request.json();
+    rawBody = await request.text();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  if (getJsonBodySize(rawBody) > bodySizeLimitBytes) {
+    return NextResponse.json(
+      { error: `Solver payload cannot be larger than ${bodySizeLimitBytes} bytes.` },
+      { status: 413 }
+    );
+  }
+
+  try {
+    payload = JSON.parse(rawBody) as unknown;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -90,6 +232,18 @@ export async function POST(request: Request) {
     allowed_time_window?: unknown;
     time_zone?: unknown;
   };
+
+  const workloadErrors = validateSolverPayloadWorkload(
+    candidate,
+    getSolverPayloadLimits()
+  );
+  if (workloadErrors.length > 0) {
+    return NextResponse.json(
+      { error: workloadErrors.join(" ") },
+      { status: 413 }
+    );
+  }
+
   const { allowedTimeWindow, error: allowedTimeWindowError } =
     normalizeAllowedTimeWindowInput(candidate.allowed_time_window);
 
