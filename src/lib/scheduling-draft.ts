@@ -27,9 +27,13 @@ function normalizeStringArray(value: unknown) {
     return null;
   }
 
-  return [...new Set(value)]
-    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
-    .filter((entry) => entry.length > 0);
+  return [
+    ...new Set(
+      value
+        .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+        .filter((entry) => entry.length > 0)
+    ),
+  ];
 }
 
 function normalizeSchedulingDraftBlock(value: unknown): SchedulingDraftBlock | null {

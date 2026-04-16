@@ -39,3 +39,80 @@ test("normalizeSchedulingDraftState backfills default rehearsal hours for legacy
     blocks: [],
   });
 });
+
+test("normalizeSchedulingDraftState rejects invalid time zones", () => {
+  const draft = normalizeSchedulingDraftState({
+    selectedTimeZone: "Mars/Olympus_Mons",
+    horizonStart: "2026-03-01T08:00",
+    horizonEnd: "2026-03-01T12:00",
+    blocks: [],
+  });
+
+  assert.equal(draft, null);
+});
+
+test("normalizeSchedulingDraftState rejects invalid allowed rehearsal windows", () => {
+  const draft = normalizeSchedulingDraftState({
+    selectedTimeZone: "UTC",
+    horizonStart: "2026-03-01T08:00",
+    horizonEnd: "2026-03-01T12:00",
+    allowedStartTime: "22:00",
+    allowedEndTime: "08:00",
+    blocks: [],
+  });
+
+  assert.equal(draft, null);
+});
+
+test("normalizeSchedulingDraftState trims and deduplicates block relationships", () => {
+  const draft = normalizeSchedulingDraftState({
+    selectedTimeZone: "UTC",
+    horizonStart: "2026-03-01T08:00",
+    horizonEnd: "2026-03-01T12:00",
+    blocks: [
+      {
+        clientId: "block-1",
+        label: "Opening",
+        durationMinutes: "60",
+        requiredPeopleIds: [" person-1 ", "person-1", ""],
+        predecessorBlockIds: [" block-0 ", "block-0", ""],
+      },
+    ],
+  });
+
+  assert.deepEqual(draft, {
+    selectedTimeZone: "UTC",
+    horizonStart: "2026-03-01T08:00",
+    horizonEnd: "2026-03-01T12:00",
+    allowedStartTime: "08:00",
+    allowedEndTime: "23:30",
+    blocks: [
+      {
+        clientId: "block-1",
+        label: "Opening",
+        durationMinutes: "60",
+        requiredPeopleIds: ["person-1"],
+        predecessorBlockIds: ["block-0"],
+      },
+    ],
+  });
+});
+
+test("normalizeSchedulingDraftState rejects malformed blocks", () => {
+  const draft = normalizeSchedulingDraftState({
+    selectedTimeZone: "UTC",
+    horizonStart: "2026-03-01T08:00",
+    horizonEnd: "2026-03-01T12:00",
+    blocks: [
+      {
+        clientId: "block-1",
+        label: "Opening",
+        durationMinutes: "60",
+        requiredPeopleIds: "person-1",
+        predecessorBlockIds: [],
+      },
+    ],
+  });
+
+  assert.equal(draft, null);
+});
