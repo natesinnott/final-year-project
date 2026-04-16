@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { decryptSecret, encryptSecret } from "@/lib/crypto";
+import { encryptSecret } from "@/lib/crypto";
 import { SsoProvider } from "@prisma/client";
 
 // Admin-only endpoint to save/read organisation SSO configuration and domain routing.
@@ -34,21 +34,15 @@ export async function POST(request: Request) {
   const payload = (await request.json()) as ConfigPayload;
 
   // Guard required fields before encrypting secrets.
-  if (!payload.provider || !payload.clientId || !payload.clientSecret) {
+  if (!payload.provider || !payload.clientId) {
     return NextResponse.json(
-      { error: "Provider, clientId, and clientSecret are required." },
+      { error: "Provider and clientId are required." },
       { status: 400 }
     );
   }
   const provider = payload.provider as SsoProvider;
   const clientId = payload.clientId.trim();
-  const clientSecret = payload.clientSecret.trim();
-  if (!clientSecret) {
-    return NextResponse.json(
-      { error: "Client secret is required." },
-      { status: 400 }
-    );
-  }
+  const clientSecret = payload.clientSecret?.trim() ?? "";
   if (!clientId) {
     return NextResponse.json({ error: "Client ID is required." }, { status: 400 });
   }
@@ -63,17 +57,28 @@ export async function POST(request: Request) {
   }
 
   const organisationId = membership.organisationId;
+  const existingConfig = await prisma.organisationSsoConfig.findUnique({
+    where: { organisationId },
+    select: { id: true },
+  });
+
+  if (!existingConfig && !clientSecret) {
+    return NextResponse.json(
+      { error: "Client secret is required." },
+      { status: 400 }
+    );
+  }
 
   // Update the SSO config and overwrite domain mappings in a single transaction.
   await prisma.$transaction(async (tx) => {
-    const encryptedSecret = encryptSecret(clientSecret);
+    const encryptedSecret = clientSecret ? encryptSecret(clientSecret) : undefined;
     await tx.organisationSsoConfig.upsert({
       where: { organisationId },
       create: {
         organisationId,
         provider,
         clientId,
-        clientSecret: encryptedSecret,
+        clientSecret: encryptedSecret!,
         issuer: payload.issuer?.trim() || null,
         tenantId: payload.tenantId?.trim() || null,
         enabled: payload.enabled ?? true,
@@ -81,7 +86,7 @@ export async function POST(request: Request) {
       update: {
         provider,
         clientId,
-        clientSecret: encryptedSecret,
+        ...(encryptedSecret ? { clientSecret: encryptedSecret } : {}),
         issuer: payload.issuer?.trim() || null,
         tenantId: payload.tenantId?.trim() || null,
         enabled: payload.enabled ?? true,
@@ -135,24 +140,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
   }
 
-  // Return decrypted secrets so admins can see/update the current config.
+  // Never return stored client secrets to the browser.
   let ssoConfig = null;
   if (organisation.ssoConfig) {
-    try {
-      ssoConfig = {
-        provider: organisation.ssoConfig.provider,
-        clientId: organisation.ssoConfig.clientId,
-        clientSecret: decryptSecret(organisation.ssoConfig.clientSecret),
-        issuer: organisation.ssoConfig.issuer,
-        tenantId: organisation.ssoConfig.tenantId,
-        enabled: organisation.ssoConfig.enabled,
-      };
-    } catch {
-      return NextResponse.json(
-        { error: "SSO secret could not be decrypted." },
-        { status: 500 }
-      );
-    }
+    ssoConfig = {
+      provider: organisation.ssoConfig.provider,
+      clientId: organisation.ssoConfig.clientId,
+      hasClientSecret: Boolean(organisation.ssoConfig.clientSecret),
+      issuer: organisation.ssoConfig.issuer,
+      tenantId: organisation.ssoConfig.tenantId,
+      enabled: organisation.ssoConfig.enabled,
+    };
   }
 
   return NextResponse.json({

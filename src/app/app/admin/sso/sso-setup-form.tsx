@@ -8,6 +8,7 @@ type FormState = {
   provider: Provider;
   clientId: string;
   clientSecret: string;
+  hasClientSecret: boolean;
   issuer: string;
   tenantId: string;
   domains: string;
@@ -18,6 +19,7 @@ const defaultState: FormState = {
   provider: "ENTRA",
   clientId: "",
   clientSecret: "",
+  hasClientSecret: false,
   issuer: "",
   tenantId: "",
   domains: "",
@@ -47,7 +49,8 @@ export default function SsoSetupForm() {
           ...prev,
           provider: payload.ssoConfig.provider,
           clientId: payload.ssoConfig.clientId ?? "",
-          clientSecret: payload.ssoConfig.clientSecret ?? "",
+          clientSecret: "",
+          hasClientSecret: Boolean(payload.ssoConfig.hasClientSecret),
           issuer: payload.ssoConfig.issuer ?? "",
           tenantId: payload.ssoConfig.tenantId ?? "",
           enabled: payload.ssoConfig.enabled ?? true,
@@ -71,6 +74,7 @@ export default function SsoSetupForm() {
     setMessage(null);
 
     try {
+      const clientSecret = formState.clientSecret.trim();
       // Persist config and domain mappings via the API.
       const response = await fetch("/api/sso/config", {
         method: "POST",
@@ -80,7 +84,7 @@ export default function SsoSetupForm() {
         body: JSON.stringify({
           provider: formState.provider,
           clientId: formState.clientId,
-          clientSecret: formState.clientSecret,
+          ...(clientSecret ? { clientSecret } : {}),
           issuer: formState.issuer || undefined,
           tenantId: formState.tenantId || undefined,
           enabled: formState.enabled,
@@ -96,6 +100,11 @@ export default function SsoSetupForm() {
         throw new Error(payload?.error ?? "Unable to save SSO configuration.");
       }
 
+      setFormState((prev) => ({
+        ...prev,
+        clientSecret: "",
+        hasClientSecret: prev.hasClientSecret || Boolean(clientSecret),
+      }));
       setMessage("SSO configuration saved.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Something went wrong.");
@@ -155,14 +164,24 @@ export default function SsoSetupForm() {
             type="password"
             className="mt-2 w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-100"
             value={formState.clientSecret}
+            placeholder={
+              formState.hasClientSecret
+                ? "Leave blank to keep current secret"
+                : undefined
+            }
             onChange={(event) =>
               setFormState((prev) => ({
                 ...prev,
                 clientSecret: event.target.value,
               }))
             }
-            required
+            required={!formState.hasClientSecret}
           />
+          {formState.hasClientSecret ? (
+            <p className="mt-2 text-xs text-slate-500">
+              A client secret is already stored. Enter a new one only to replace it.
+            </p>
+          ) : null}
         </div>
 
         {formState.provider === "OKTA" ? (
