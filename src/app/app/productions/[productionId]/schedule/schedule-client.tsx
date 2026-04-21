@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { TeamAvailabilityMember } from "@/lib/availability";
 import {
   CURATED_TIME_ZONES,
@@ -97,7 +97,10 @@ const SOLVER_RESULT_STATUSES = new Set([
 ]);
 const PUBLISHABLE_SOLVER_STATUSES = new Set(["OPTIMAL", "FEASIBLE"]);
 const TIMEZONE_STORAGE_KEY = "stagesuite.schedule-timezone";
+const DEBUG_VISIBILITY_STORAGE_KEY = "stagesuite.schedule-debug-visible";
 const DRAFT_SAVE_DEBOUNCE_MS = 800;
+const DEBUG_TITLE_TAP_WINDOW_MS = 1500;
+const DEBUG_TITLE_TAP_COUNT = 5;
 
 function generateClientId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -382,8 +385,10 @@ export default function ScheduleClient({
   initialDraft,
   initialCompleteness,
 }: ScheduleClientProps) {
+  const debugVisibleByDefault = process.env.NODE_ENV !== "production";
   const dateTime = useBrowserDateTime();
   const schedulerWarmup = useSchedulerWarmup(productionId);
+  const debugTitleTapTimestampsRef = useRef<number[]>([]);
   const detectedTimeZone = useMemo(() => detectSystemTimeZone(), []);
   const hasLockedTimeZone = Boolean(
     initialTimeZone && isValidTimeZone(initialTimeZone)
@@ -435,6 +440,60 @@ export default function ScheduleClient({
 
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
+  const [debugVisible, setDebugVisible] = useState(debugVisibleByDefault);
+  const [debugVisibilityReady, setDebugVisibilityReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const storedValue = window.localStorage.getItem(DEBUG_VISIBILITY_STORAGE_KEY);
+
+    if (storedValue === "true") {
+      setDebugVisible(true);
+    } else if (storedValue === "false") {
+      setDebugVisible(false);
+    } else {
+      setDebugVisible(debugVisibleByDefault);
+    }
+
+    setDebugVisibilityReady(true);
+  }, [debugVisibleByDefault]);
+
+  useEffect(() => {
+    if (!debugVisibilityReady || typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      DEBUG_VISIBILITY_STORAGE_KEY,
+      debugVisible ? "true" : "false"
+    );
+  }, [debugVisibilityReady, debugVisible]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function handleDebugShortcut(event: KeyboardEvent) {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "d"
+      ) {
+        event.preventDefault();
+        setDebugVisible((current) => !current);
+      }
+    }
+
+    window.addEventListener("keydown", handleDebugShortcut);
+
+    return () => {
+      window.removeEventListener("keydown", handleDebugShortcut);
+    };
+  }, []);
 
   useEffect(() => {
     if (hasLockedTimeZone && initialTimeZone) {
@@ -1020,6 +1079,20 @@ export default function ScheduleClient({
     );
   }
 
+  const handleDebugTitleTap = useCallback(() => {
+    const now = Date.now();
+    const recentTaps = debugTitleTapTimestampsRef.current.filter(
+      (timestamp) => now - timestamp <= DEBUG_TITLE_TAP_WINDOW_MS
+    );
+    recentTaps.push(now);
+    debugTitleTapTimestampsRef.current = recentTaps;
+
+    if (recentTaps.length >= DEBUG_TITLE_TAP_COUNT) {
+      debugTitleTapTimestampsRef.current = [];
+      setDebugVisible(true);
+    }
+  }, []);
+
   return (
     <div className="grid gap-6">
       <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
@@ -1028,7 +1101,10 @@ export default function ScheduleClient({
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
               Schedule workspace
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">
+            <h2
+              className="mt-2 text-2xl font-semibold text-white"
+              onClick={handleDebugTitleTap}
+            >
               Build and publish schedules
             </h2>
           </div>
@@ -1553,11 +1629,18 @@ export default function ScheduleClient({
         )}
       </section>
 
-      <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
-        <details>
-          <summary className="cursor-pointer text-sm font-semibold text-slate-200">
-            Debug JSON
-          </summary>
+      {debugVisible ? (
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-slate-200">Debug JSON</h3>
+            <button
+              className="text-xs font-medium text-slate-400 transition hover:text-slate-200"
+              onClick={() => setDebugVisible(false)}
+              type="button"
+            >
+              Hide debug
+            </button>
+          </div>
           <div className="mt-4 grid gap-4">
             <div>
               <h4 className="text-sm font-semibold text-white">Generated solver payload</h4>
@@ -1572,8 +1655,8 @@ export default function ScheduleClient({
               </pre>
             </div>
           </div>
-        </details>
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }
