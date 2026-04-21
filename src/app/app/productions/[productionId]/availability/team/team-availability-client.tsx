@@ -82,9 +82,7 @@ export default function TeamAvailabilityClient({
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
               Completeness
             </p>
-            <h2 className="mt-2 text-lg font-semibold text-white">
-              Conflict submission status
-            </h2>
+            <h2 className="mt-2 text-lg font-semibold text-white">Conflict status</h2>
           </div>
           <span
             className={`rounded-full border px-3 py-1 text-xs font-semibold ${
@@ -119,7 +117,7 @@ export default function TeamAvailabilityClient({
         {data && data.completeness.missing_members.length > 0 ? (
           <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-4">
             <h3 className="text-sm font-semibold text-rose-100">
-              Members who have not submitted conflicts
+              Missing submissions
             </h3>
             <ul className="mt-2 space-y-1 text-sm text-rose-100/90">
               {data.completeness.missing_members.map((member) => (
@@ -146,7 +144,7 @@ export default function TeamAvailabilityClient({
 
         {isLoading ? (
           <div className="mt-4 text-sm text-slate-300">
-            Loading cast and crew conflicts...
+            Loading conflicts...
           </div>
         ) : null}
 
@@ -171,14 +169,14 @@ export default function TeamAvailabilityClient({
                     </p>
                   </div>
                   <span className="text-xs text-slate-300">
-                    {member.submittedAt ? "Submitted" : "Not submitted"} · Conflicts:{" "}
-                    {member.windows.length}
+                    {member.submittedAt ? "Submitted" : "Not submitted"} ·{" "}
+                    {member.windows.length} conflicts
                   </span>
                 </div>
 
                 {member.windows.length === 0 ? (
                   <p className="mt-3 text-sm text-slate-400">
-                    {member.submittedAt ? "No conflicts submitted." : "No submission yet."}
+                    {member.submittedAt ? "No conflicts." : "No submission."}
                   </p>
                 ) : (
                   <div className="mt-3 overflow-hidden rounded-lg border border-slate-800">

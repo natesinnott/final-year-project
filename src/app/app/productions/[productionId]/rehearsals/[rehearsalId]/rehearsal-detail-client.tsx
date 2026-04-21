@@ -233,7 +233,7 @@ export default function RehearsalDetailClient({
 
             {!isCalledUser ? (
               <p className="mt-3 text-sm text-slate-400">
-                You are not currently called to this rehearsal.
+                You are not called for this rehearsal.
               </p>
             ) : (
               <>
@@ -246,8 +246,8 @@ export default function RehearsalDetailClient({
                 </div>
                 <p className="mt-3 text-sm text-slate-300">
                   {canSelfReport
-                    ? "Report or edit your absence before the rehearsal starts."
-                    : "Self-reporting is closed once the rehearsal has started."}
+                    ? "Report before start."
+                    : "Reporting closed."}
                 </p>
                 {canSelfReport ? (
                   <>
@@ -279,7 +279,7 @@ export default function RehearsalDetailClient({
                           onClick={clearOwnAbsence}
                           disabled={isPending}
                         >
-                          Clear back to present
+                          Mark present
                         </button>
                       ) : null}
                     </div>
@@ -342,7 +342,7 @@ export default function RehearsalDetailClient({
                       {entry.status.replace(/_/g, " ")}
                     </span>
                     <span className="rounded-full border border-slate-700 bg-slate-950/50 px-3 py-1 text-xs text-slate-400">
-                      {entry.hasExplicitRow ? "Explicit record" : "Implied present"}
+                      {entry.hasExplicitRow ? "Recorded" : "Default present"}
                     </span>
                   </div>
                 </div>
@@ -386,7 +386,7 @@ export default function RehearsalDetailClient({
           </div>
         ) : (
           <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-6 text-sm text-slate-400">
-            Only directors and stage managers can view the full called roster.
+            Roster visible to directors and stage managers only.
           </div>
         )}
       </section>

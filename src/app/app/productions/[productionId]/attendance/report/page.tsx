@@ -60,10 +60,7 @@ export default async function AttendanceReportPage({
               <h1 className="mt-3 text-2xl font-semibold text-white">
                 {access.productionName}
               </h1>
-              <p className="mt-2 text-sm text-slate-300">
-                Non-present attendance entries only, displayed in{" "}
-                {access.productionTimeZone}.
-              </p>
+              <p className="mt-2 text-sm text-slate-300">Non-present entries in {access.productionTimeZone}.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <a
@@ -85,7 +82,7 @@ export default async function AttendanceReportPage({
         <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
           {rows.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-700 px-4 py-8 text-center text-sm text-slate-400">
-              No non-present attendance records exist for this production yet.
+              No attendance issues recorded
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-slate-800">

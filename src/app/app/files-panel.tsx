@@ -147,7 +147,7 @@ export default function FilesPanel({
               ))}
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Leave empty to make the file visible to the whole production.
+              Leave empty to share with everyone.
             </p>
           </div>
 
@@ -177,8 +177,7 @@ export default function FilesPanel({
 
         {files.length === 0 ? (
           <div className="px-4 py-6 text-sm text-slate-400">
-            No files uploaded yet. Choreography, music, and blocking files will show up
-            here.
+            No files
           </div>
         ) : (
           files.map((item) => (

@@ -31,7 +31,7 @@ export default function UpcomingRehearsalsPanel({
       <div className="mt-4 grid gap-3">
         {rehearsals.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-700 px-4 py-8 text-center text-sm text-slate-400">
-            No published rehearsals are scheduled yet.
+            No rehearsals scheduled
           </div>
         ) : (
           rehearsals.map((rehearsal, index) => {

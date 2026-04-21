@@ -126,7 +126,7 @@ export default function TodayAttendanceClient({
 
       {blocks.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-700 px-4 py-8 text-center text-sm text-slate-400">
-          No rehearsal blocks overlap today in {productionTimeZone}.
+          No rehearsals today
         </div>
       ) : (
         <div className="grid gap-4">
@@ -177,7 +177,7 @@ export default function TodayAttendanceClient({
                           {entry.status.replace(/_/g, " ")}
                         </span>
                         <span className="rounded-full border border-slate-700 bg-slate-950/50 px-3 py-1 text-xs text-slate-400">
-                          {entry.hasExplicitRow ? "Explicit record" : "Implied present"}
+                          {entry.hasExplicitRow ? "Recorded" : "Default present"}
                         </span>
                       </div>
                     </div>

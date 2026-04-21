@@ -67,8 +67,8 @@ export default async function ProductionRehearsalsPage({
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-300">
                 {access.canManageAttendance
-                  ? "Stage managers and directors can review called rosters, update attendance, and jump into the today board."
-                  : "View your called rehearsal blocks and report absence before the rehearsal starts."}
+                  ? "Review rosters and attendance."
+                  : "View your rehearsal calls."}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">

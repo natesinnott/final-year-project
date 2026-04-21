@@ -1029,12 +1029,8 @@ export default function ScheduleClient({
               Schedule workspace
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-white">
-              Build, solve, and publish rehearsals
+              Build and publish schedules
             </h2>
-            <p className="mt-2 max-w-2xl text-sm text-slate-300">
-              Directors can build rehearsal blocks graphically, add ordering dependencies,
-              preview the proposed schedule, and publish only committed solver results.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -1245,7 +1241,7 @@ export default function ScheduleClient({
 
             {hasNoBlocks ? (
               <div className="mt-4 rounded-xl border border-dashed border-slate-700 px-4 py-8 text-center text-sm text-slate-400">
-                Add at least one rehearsal block before running the solver.
+                Add a block to run the solver.
               </div>
             ) : (
               <div className="mt-4 grid gap-4">
@@ -1312,9 +1308,7 @@ export default function ScheduleClient({
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <h4 className="text-sm font-medium text-white">Required people</h4>
-                              <p className="text-xs text-slate-400">
-                                Select the production members needed for this rehearsal.
-                              </p>
+                              <p className="text-xs text-slate-400">Required for this block.</p>
                             </div>
                             <span className="text-xs text-slate-400">
                               Selected: {block.requiredPeopleIds.length}
@@ -1346,9 +1340,7 @@ export default function ScheduleClient({
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <h4 className="text-sm font-medium text-white">Dependencies</h4>
-                              <p className="text-xs text-slate-400">
-                                Choose any blocks that must happen before this one.
-                              </p>
+                              <p className="text-xs text-slate-400">Must finish first.</p>
                             </div>
                             <span className="text-xs text-slate-400">
                               Selected: {block.predecessorBlockIds.length}
@@ -1357,7 +1349,7 @@ export default function ScheduleClient({
 
                           {otherBlocks.length === 0 ? (
                             <div className="mt-3 rounded-xl border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-400">
-                              Add another block to create dependencies.
+                              Add another block.
                             </div>
                           ) : (
                             <div className="mt-3 grid gap-2">
@@ -1427,7 +1419,7 @@ export default function ScheduleClient({
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
               Readiness
             </p>
-            <h3 className="mt-2 text-lg font-semibold text-white">Conflict submission status</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">Conflict status</h3>
 
             <div className="mt-4 grid gap-3 text-sm text-slate-300">
               <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
@@ -1459,7 +1451,7 @@ export default function ScheduleClient({
 
             {completeness.missing_members.length === 0 ? (
               <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-                All required members have submitted conflicts.
+                All conflicts submitted
               </div>
             ) : (
               <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-4">
@@ -1504,9 +1496,6 @@ export default function ScheduleClient({
               Proposed schedule
             </p>
             <h3 className="mt-2 text-lg font-semibold text-white">Solver results</h3>
-            <p className="mt-2 text-sm text-slate-300">
-              Review the generated placements before publishing them to production members.
-            </p>
           </div>
           {canPublish ? (
             <button
@@ -1532,7 +1521,7 @@ export default function ScheduleClient({
                 <div>Room</div>
               </div>
               {placements.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-slate-300">No placements returned.</div>
+                <div className="px-4 py-3 text-sm text-slate-300">No placements</div>
               ) : (
                 placements.map((placement, index) => {
                   const blockId = placement.block_id ?? placement.blockId ?? "-";
@@ -1559,7 +1548,7 @@ export default function ScheduleClient({
           </>
         ) : (
           <div className="mt-4 rounded-xl border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-400">
-            No solver result yet.
+            No schedule generated
           </div>
         )}
       </section>

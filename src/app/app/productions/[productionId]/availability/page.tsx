@@ -59,9 +59,7 @@ export default async function ProductionAvailabilityPage({
               <h1 className="mt-3 text-2xl font-semibold text-white">
                 {production.name}
               </h1>
-              <p className="mt-2 text-sm text-slate-300">
-                Add conflicts in your selected time zone. You are assumed available outside them.
-              </p>
+              <p className="mt-2 text-sm text-slate-300">Add conflict windows.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <a

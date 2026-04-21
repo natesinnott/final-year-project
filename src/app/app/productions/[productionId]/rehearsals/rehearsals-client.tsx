@@ -156,8 +156,7 @@ export default function ProductionRehearsalsClient({
             Rehearsal blocks
           </h2>
           <p className="mt-2 text-sm text-slate-300">
-            Displayed in {productionTimeZone}. {rehearsals.length} published block
-            {rehearsals.length === 1 ? "" : "s"} visible.
+            {rehearsals.length} scheduled · {productionTimeZone}
           </p>
         </div>
 
@@ -189,7 +188,7 @@ export default function ProductionRehearsalsClient({
 
       {rehearsals.length === 0 ? (
         <div className="mt-4 rounded-xl border border-dashed border-slate-700 px-4 py-8 text-center text-sm text-slate-400">
-          No published rehearsals are scheduled yet.
+          No rehearsals scheduled
         </div>
       ) : null}
 
@@ -211,7 +210,7 @@ export default function ProductionRehearsalsClient({
                     })}
                   </p>
                   <p className="mt-1 text-xs text-slate-400">
-                    {venue ?? "Default room"} · Called users: {rehearsal.calledUserCount}
+                    {venue ?? "Default room"} · Called: {rehearsal.calledUserCount}
                   </p>
                 </div>
 
@@ -219,7 +218,7 @@ export default function ProductionRehearsalsClient({
                   {canManageAttendance ? (
                     <>
                       <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-100">
-                        Reported absent: {rehearsal.absentCount}
+                        Absent: {rehearsal.absentCount}
                       </span>
                       <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs text-rose-100">
                         No-show: {rehearsal.noShowCount}
@@ -245,15 +244,12 @@ export default function ProductionRehearsalsClient({
         <div className="mt-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-white">
-                {dateTime.formatLocalDate(monthAnchor, productionTimeZone, {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </h3>
-              <p className="text-sm text-slate-400">
-                Monday-first month view
-              </p>
+                <h3 className="text-lg font-semibold text-white">
+                  {dateTime.formatLocalDate(monthAnchor, productionTimeZone, {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </h3>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -338,8 +334,8 @@ export default function ProductionRehearsalsClient({
 
       <p className="mt-4 text-xs text-slate-400">
         {canViewAllRehearsals
-          ? "Attendance staff can see every published rehearsal in this production."
-          : "You only see rehearsal blocks where you are currently called."}
+          ? "Showing all published rehearsals."
+          : "Showing your rehearsal calls only."}
       </p>
     </section>
   );

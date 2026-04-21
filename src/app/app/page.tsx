@@ -411,7 +411,6 @@ export default async function HomePage({
             <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-white">Your tasks</h2>
-                <span className="text-xs text-slate-400">Static sample</span>
               </div>
               <div className="mt-4 grid gap-3">
                 {tasks.map((task) => (
@@ -446,7 +445,6 @@ export default async function HomePage({
         <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-white">Conflict submission snapshot</h2>
-            <span className="text-xs text-slate-400">Static sample</span>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
@@ -482,7 +480,7 @@ export default async function HomePage({
                   </Link>
                 </div>
               ) : (
-                <span>All required members have submitted conflicts.</span>
+                <span>All conflicts submitted.</span>
               )}
             </div>
           ) : (

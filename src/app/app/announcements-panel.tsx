@@ -108,8 +108,7 @@ export default function AnnouncementsPanel({
       <div className="mt-4 grid gap-4">
         {announcements.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-800 p-6 text-sm text-slate-400">
-            No announcements yet. When directors or stage managers post updates, they
-            will appear here.
+            No announcements
           </div>
         ) : (
           announcements.map((announcement) => (
@@ -175,7 +174,7 @@ export default function AnnouncementsPanel({
               ))}
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Leave empty to broadcast to the whole production.
+              Leave empty to send to everyone.
             </p>
           </div>
 

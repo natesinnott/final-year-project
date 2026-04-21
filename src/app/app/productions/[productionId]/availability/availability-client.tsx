@@ -313,10 +313,9 @@ export default function AvailabilityClient({ productionId }: AvailabilityClientP
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
             Your conflicts
           </p>
-          <h2 className="mt-2 text-lg font-semibold text-white">Submit conflicts</h2>
+          <h2 className="mt-2 text-lg font-semibold text-white">Conflicts</h2>
           <p className="mt-2 text-sm text-slate-300">
-            You are assumed available outside the conflicts you add. Displayed in{" "}
-            <span className="font-semibold text-slate-100">{displayTimeZone}</span>. Saved in UTC.
+            Shown in <span className="font-semibold text-slate-100">{displayTimeZone}</span>.
           </p>
         </div>
 
@@ -348,7 +347,7 @@ export default function AvailabilityClient({ productionId }: AvailabilityClientP
           </select>
           <span
             className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 text-xs text-slate-300"
-            title="Your selected timezone is used for entering and reviewing conflicts. Conflicts are always stored and sent to the API in UTC."
+            title="Used for entry and display. Stored in UTC."
           >
             ?
           </span>
@@ -369,7 +368,7 @@ export default function AvailabilityClient({ productionId }: AvailabilityClientP
                 : "border-amber-500/40 bg-amber-500/10 text-amber-100"
             }`}
           >
-            {submittedAt ? "Conflicts submitted" : "Review needed"}
+            {submittedAt ? "Conflicts submitted" : "Not submitted"}
           </span>
           {submittedAt ? (
             <span className="text-xs text-slate-400">
@@ -383,7 +382,7 @@ export default function AvailabilityClient({ productionId }: AvailabilityClientP
               onClick={submitConflicts}
               disabled={isSaving}
             >
-              {windows.length === 0 ? "Confirm no conflicts" : "Submit conflicts"}
+              {windows.length === 0 ? "Submit none" : "Submit conflicts"}
             </button>
           ) : null}
         </div>
@@ -406,10 +405,7 @@ export default function AvailabilityClient({ productionId }: AvailabilityClientP
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-white">Add conflict</h3>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Use start and end date/time values in {displayTimeZone}. 15-minute steps are
-                    preserved.
-                  </p>
+                  <p className="mt-1 text-xs text-slate-400">In {displayTimeZone}.</p>
                 </div>
               </div>
 

@@ -55,10 +55,7 @@ export default async function TodayAttendancePage({
               <h1 className="mt-3 text-2xl font-semibold text-white">
                 {access.productionName}
               </h1>
-              <p className="mt-2 text-sm text-slate-300">
-                Attendance for rehearsal blocks happening today in{" "}
-                {access.productionTimeZone}.
-              </p>
+              <p className="mt-2 text-sm text-slate-300">Today in {access.productionTimeZone}.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <a

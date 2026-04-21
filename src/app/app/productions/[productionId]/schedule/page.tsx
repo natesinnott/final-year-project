@@ -78,9 +78,7 @@ export default async function ProductionSchedulePage({
               <h1 className="mt-3 text-2xl font-semibold text-white">
                 {production.name}
               </h1>
-              <p className="mt-2 text-sm text-slate-300">
-                Build rehearsal blocks, run the solver, and publish the committed schedule.
-              </p>
+              <p className="mt-2 text-sm text-slate-300">Build and publish schedules.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <a

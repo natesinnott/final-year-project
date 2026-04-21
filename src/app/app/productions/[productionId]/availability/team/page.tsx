@@ -54,10 +54,7 @@ export default async function ProductionTeamAvailabilityPage({
               <h1 className="mt-3 text-2xl font-semibold text-white">
                 {production.name}
               </h1>
-              <p className="mt-2 text-sm text-slate-300">
-                Review submitted conflicts across the company and follow up on missing
-                responses.
-              </p>
+              <p className="mt-2 text-sm text-slate-300">Review submissions and missing responses.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <a
