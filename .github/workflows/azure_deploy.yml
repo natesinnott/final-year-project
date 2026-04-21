@@ -44,9 +44,6 @@ jobs:
           mkdir -p deploy/.next
           rsync -a --delete --exclude='cache' .next/ deploy/.next/
       
-          # Public assets
-          cp -r public deploy/public
-      
           # Sanity checks
           test -f deploy/server.js
           test -f deploy/.next/BUILD_ID
