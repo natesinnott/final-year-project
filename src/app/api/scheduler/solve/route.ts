@@ -233,6 +233,7 @@ export async function POST(request: Request) {
     time_zone?: unknown;
   };
 
+  // Validate workload-related constraints before more expensive validations and upstream request
   const workloadErrors = validateSolverPayloadWorkload(
     candidate,
     getSolverPayloadLimits()
@@ -244,6 +245,7 @@ export async function POST(request: Request) {
     );
   }
 
+  // Normalisation of client input into strict internal format
   const { allowedTimeWindow, error: allowedTimeWindowError } =
     normalizeAllowedTimeWindowInput(candidate.allowed_time_window);
 
@@ -294,6 +296,7 @@ export async function POST(request: Request) {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
+    // External service call isolated behind API route with strict validation and normalisation
     const upstream = await fetch(`${config.baseUrl}/solve`, {
       method: "POST",
       headers: {

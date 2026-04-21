@@ -549,6 +549,7 @@ export function buildSolverPayload({
   blocks: ScheduleBuilderBlock[];
   members: TeamAvailabilityMember[];
 }): SolverPayload | null {
+  // Normalises client input into UTC representation
   const parsedHorizonStart = parseSchedulerLocalDateTime(horizonStart, timeZone);
   const parsedHorizonEnd = parseSchedulerLocalDateTime(horizonEnd, timeZone);
   const allowedTimeWindowErrors = validateAllowedTimeWindow({
@@ -571,6 +572,7 @@ export function buildSolverPayload({
     time_zone: timeZone,
     time_granularity_minutes: SCHEDULER_TIME_GRANULARITY_MINUTES,
     blocks: blocks.map((block) => ({
+      // Canonical IDs generated to decouple from user-submitted values
       id: buildSolverBlockId(block),
       duration_minutes: block.durationMinutes,
       required_people_ids: block.requiredPeopleIds,
@@ -578,6 +580,7 @@ export function buildSolverPayload({
     })),
     people: members.map((member) => ({
       id: member.userId,
+      // Availability windows built dynamically from conflict windows
       availability_windows: buildAvailabilityFromConflicts({
         conflicts: member.windows,
         horizonStart: parsedHorizonStart,

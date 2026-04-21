@@ -11,6 +11,7 @@ function parseId(request: Request) {
 }
 
 export async function GET(request: Request) {
+  // Authentication enforced at API boundary
   const session = await auth.api.getSession({ headers: request.headers });
   const userId = session?.user?.id;
 
@@ -22,7 +23,6 @@ export async function GET(request: Request) {
   if (!id) {
     return NextResponse.json({ error: "Missing file id" }, { status: 400 });
   }
-
   const file = await prisma.fileAsset.findUnique({
     where: { id },
   });
@@ -30,11 +30,10 @@ export async function GET(request: Request) {
   if (!file) {
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
-
+  // Dual-layer access control: user must be a member of the organisation and production
   const membership = await prisma.membership.findFirst({
     where: { userId, organisationId: file.organisationId },
   });
-
   const productionMember = await prisma.productionMember.findFirst({
     where: { userId, productionId: file.productionId },
   });
@@ -48,6 +47,7 @@ export async function GET(request: Request) {
     file.visibleToRoles.length === 0 ||
     file.visibleToRoles.includes(productionMember.role);
 
+  // If the user is not an org admin and their production role is not allowed to view the file, deny access
   if (!isOrgAdmin && !roleAllowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -60,7 +60,6 @@ export async function GET(request: Request) {
   if (!body) {
     return NextResponse.json({ error: "Unable to download file" }, { status: 500 });
   }
-
   return new NextResponse(body as unknown as BodyInit, {
     headers: {
       "Content-Type": file.mimeType || "application/octet-stream",

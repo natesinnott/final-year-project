@@ -73,6 +73,7 @@ function mergeWindows(windows: Array<{ start: string; end: string }>) {
   return merged;
 }
 
+// Convert conflict windows to positive availabilty windows for solver input
 export function buildAvailabilityFromConflicts({
   conflicts,
   horizonStart,
