@@ -9,8 +9,6 @@ import {
   formatInstantForLocale,
   formatLocalDateFallback,
   formatLocalDateForLocale,
-  formatTimeLabelFallback,
-  formatTimeLabelForLocale,
 } from "@/lib/dateTimeDisplay";
 
 function subscribe() {
@@ -67,19 +65,9 @@ export function useBrowserDateTime() {
     return formatLocalDateForLocale(local, timeZone, browserLocale, options);
   }
 
-  function formatTimeLabel(minutes: number, options?: Intl.DateTimeFormatOptions) {
-    if (!browserLocale) {
-      return formatTimeLabelFallback(minutes, options);
-    }
-
-    return formatTimeLabelForLocale(minutes, browserLocale, options);
-  }
-
   return {
-    browserLocale,
     formatInstant,
     formatBrowserZoneInstant,
     formatLocalDate,
-    formatTimeLabel,
   };
 }

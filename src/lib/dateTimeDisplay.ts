@@ -1,5 +1,4 @@
 import {
-  formatTimeLabel,
   utcToZoned,
   zonedToUtc,
   type LocalDate,
@@ -15,11 +14,6 @@ const DEFAULT_LOCAL_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   weekday: "short",
   month: "short",
   day: "numeric",
-};
-
-const DEFAULT_TIME_LABEL_OPTIONS: Intl.DateTimeFormatOptions = {
-  hour: "numeric",
-  minute: "2-digit",
 };
 
 const SHORT_MONTH_NAMES = [
@@ -53,11 +47,7 @@ const LONG_MONTH_NAMES = [
 ];
 
 const SHORT_WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function toDate(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
 
 function getLocalDateAnchor(local: LocalDate, timeZone: string) {
   return (
@@ -69,13 +59,41 @@ function getLocalDateAnchor(local: LocalDate, timeZone: string) {
   );
 }
 
-function matchesTimeLabelOptions(options: Intl.DateTimeFormatOptions) {
-  const keys = Object.keys(options);
-  return keys.length === 2 && options.hour === "numeric" && options.minute === "2-digit";
-}
-
 function pad2(value: number) {
   return value.toString().padStart(2, "0");
+}
+
+function toDate(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getFormatterCacheKey(
+  locale: string,
+  options: Intl.DateTimeFormatOptions
+) {
+  const entries = Object.entries(options)
+    .filter(([, value]) => value !== undefined)
+    .sort(([left], [right]) => left.localeCompare(right));
+
+  return `${locale}|${entries
+    .map(([key, value]) => `${key}:${String(value)}`)
+    .join("|")}`;
+}
+
+function getCachedFormatter(
+  locale: string,
+  options: Intl.DateTimeFormatOptions
+) {
+  const cacheKey = getFormatterCacheKey(locale, options);
+  const existing = formatterCache.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+
+  const created = new Intl.DateTimeFormat(locale, options);
+  formatterCache.set(cacheKey, created);
+  return created;
 }
 
 function getResolvedDateOptions(options: Intl.DateTimeFormatOptions) {
@@ -197,7 +215,7 @@ export function formatInstantForLocale(
     return typeof value === "string" ? value : "";
   }
 
-  return new Intl.DateTimeFormat(locale, {
+  return getCachedFormatter(locale, {
     timeZone,
     ...options,
   }).format(date);
@@ -226,7 +244,7 @@ export function formatBrowserZoneInstantForLocale(
     return typeof value === "string" ? value : "";
   }
 
-  return new Intl.DateTimeFormat(locale, options).format(date);
+  return getCachedFormatter(locale, options).format(date);
 }
 
 export function formatBrowserZoneInstantFallback(
@@ -242,7 +260,7 @@ export function formatLocalDateForLocale(
   locale: string,
   options: Intl.DateTimeFormatOptions = DEFAULT_LOCAL_DATE_OPTIONS
 ) {
-  return new Intl.DateTimeFormat(locale, {
+  return getCachedFormatter(locale, {
     timeZone,
     ...options,
   }).format(getLocalDateAnchor(local, timeZone));
@@ -254,30 +272,4 @@ export function formatLocalDateFallback(
   options: Intl.DateTimeFormatOptions = DEFAULT_LOCAL_DATE_OPTIONS
 ) {
   return formatDeterministicDate(local, options);
-}
-
-export function formatTimeLabelForLocale(
-  minutes: number,
-  locale: string,
-  options: Intl.DateTimeFormatOptions = DEFAULT_TIME_LABEL_OPTIONS
-) {
-  const hour = Math.floor(minutes / 60);
-  const minute = minutes % 60;
-  const date = new Date(Date.UTC(2000, 0, 1, hour, minute));
-
-  return new Intl.DateTimeFormat(locale, {
-    timeZone: "UTC",
-    ...options,
-  }).format(date);
-}
-
-export function formatTimeLabelFallback(
-  minutes: number,
-  options: Intl.DateTimeFormatOptions = DEFAULT_TIME_LABEL_OPTIONS
-) {
-  if (matchesTimeLabelOptions(options)) {
-    return formatTimeLabel(minutes);
-  }
-
-  return formatTimeLabelForLocale(minutes, "en-US", options);
 }

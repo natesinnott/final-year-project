@@ -329,14 +329,6 @@ export function localRangeToUtc(
   };
 }
 
-export function formatTimeLabel(minutes: number) {
-  const hour = Math.floor(minutes / 60);
-  const minute = minutes % 60;
-  const period = hour >= 12 ? "PM" : "AM";
-  const displayHour = ((hour + 11) % 12) + 1;
-  return `${displayHour}:${minute.toString().padStart(2, "0")} ${period}`;
-}
-
 export const CURATED_TIME_ZONES = [
   "UTC",
   "America/New_York",
