@@ -105,6 +105,8 @@ async function findAttendanceMutationTarget(
     subjectUserId: string;
   }
 ) {
+  // Attendance mutations only target published rehearsals and current participants.
+  // If a later solve removes someone, we treat the old attendance state as gone too.
   const rehearsal = await tx.productionRehearsal.findFirst({
     where: {
       id: rehearsalId,
@@ -339,6 +341,8 @@ export async function staffMarkNoShow({
   subjectUserId: string;
   actorUserId: string;
 }) {
+  // No-show is a staff-only, post-start state. It intentionally does not overwrite
+  // self-reported absences until staff clear that earlier decision explicitly.
   return prisma.$transaction(async (tx) => {
     const target = await findAttendanceMutationTarget(tx, {
       productionId,

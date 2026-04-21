@@ -99,6 +99,8 @@ export async function GET(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Missing jobId" }, { status: 400 });
   }
 
+  // Scheduler job ids are opaque and not production-scoped, so polling is still
+  // gated by production access and a strict UUID shape check here.
   if (!JOB_ID_PATTERN.test(jobId)) {
     return NextResponse.json({ error: "Invalid jobId" }, { status: 400 });
   }

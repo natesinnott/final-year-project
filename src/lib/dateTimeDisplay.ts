@@ -50,6 +50,8 @@ const SHORT_WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const formatterCache = new Map<string, Intl.DateTimeFormat>();
 
 function getLocalDateAnchor(local: LocalDate, timeZone: string) {
+  // Anchor pure calendar dates at local noon before formatting. Midnight is more
+  // vulnerable to offset changes that can render the previous or next calendar day.
   return (
     zonedToUtc(
       { year: local.year, month: local.month, day: local.day, hour: 12, minute: 0 },

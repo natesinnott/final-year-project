@@ -51,6 +51,8 @@ export default async function ProductionSchedulePage({
     redirect(`/app?productionId=${production.id}`);
   }
 
+  // Keep auth, authorization, and canonical data loading on the server; the client
+  // receives only a serializable snapshot plus the current user's private draft state.
   const [teamSnapshot, initialDraft] = await Promise.all([
     getTeamAvailabilitySnapshot(production.id),
     getSchedulingDraftState({

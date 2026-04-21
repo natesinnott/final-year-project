@@ -12,6 +12,8 @@ const READY_LABEL = "Run schedule";
 const UNAVAILABLE_LABEL = "Scheduler unavailable.";
 
 export function useSchedulerWarmup(productionId: string) {
+  // Surface cold-start or sleeping-scheduler behaviour as UI state so the first
+  // solve attempt is not wasted on a request the service is not ready to handle.
   const [warmupState, setWarmupState] = useState<{
     productionId: string;
     status: SchedulerWarmupStatus;

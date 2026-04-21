@@ -140,6 +140,8 @@ function getErrorMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
+// The scheduler can answer immediately or return an async job wrapper that nests
+// the eventual result. Accept both shapes so transport mode stays a server concern.
 function extractSolveResult(payload: unknown): SolveResult | null {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -365,6 +367,8 @@ function buildSolvedPlanSnapshot(
     return null;
   }
 
+  // Placements only echo solver block ids, so keep the solved label/participant mapping
+  // that publishing needs even if the user continues editing the draft afterwards.
   return {
     horizonStart: payload.horizon_start,
     horizonEnd: payload.horizon_end,
@@ -776,6 +780,9 @@ export default function ScheduleClient({
     !completeness.is_complete ||
     !isFormValid ||
     !generatedPayload;
+
+  // Debounced autosave covers the normal path; pagehide is a best-effort flush for
+  // tab closes and route changes so directors do not lose the current draft.
   const flushDraftOnPageHide = useEffectEvent(() => {
     if (
       !timeZoneReady ||
@@ -891,6 +898,8 @@ export default function ScheduleClient({
       setLastResponse(body);
 
       if (response.status === 409 && body && typeof body === "object") {
+        // Completeness can change after the page loads, so mirror the server's
+        // latest blocking state instead of trusting stale local counts.
         const conflictBody = body as {
           missing_members?: MissingMember[];
           total_members?: number;
@@ -1178,6 +1187,8 @@ export default function ScheduleClient({
                   onChange={(event) => {
                     markDraftEdited();
                     const nextTimeZone = event.target.value;
+                    // Preserve the same instant when the display zone changes; only the
+                    // rendered wall-clock should move, not the underlying horizon.
                     setHorizonStart((current) =>
                       current
                         ? convertDateTimeInputValue(

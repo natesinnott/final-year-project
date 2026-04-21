@@ -139,6 +139,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Solve requests are comparatively expensive, so we rate-limit both bursty users
+  // and a single production repeatedly hammering the shared scheduler.
   const userRateLimit = checkInMemoryRateLimit({
     key: `scheduler:solve:user:${userId}:production:${productionId}`,
     maxHits: getPositiveInteger(
@@ -163,6 +165,8 @@ export async function POST(request: Request) {
     return rateLimitExceededResponse(productionRateLimit.retryAfterSeconds);
   }
 
+  // Re-check completeness on the server because the director's page snapshot may
+  // already be stale by the time they click solve.
   const completeness = await getAvailabilityCompleteness(productionId);
   if (!completeness.isComplete) {
     return NextResponse.json(

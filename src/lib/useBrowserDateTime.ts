@@ -24,6 +24,8 @@ function getServerLocaleSnapshot() {
 }
 
 export function useBrowserDateTime() {
+  // Server components render deterministic fallback strings first; switch to the
+  // real browser locale only after hydration to avoid mismatched date text.
   const browserLocale = useSyncExternalStore(
     subscribe,
     getBrowserLocaleSnapshot,

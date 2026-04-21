@@ -55,6 +55,8 @@ export async function findOverlappingAvailabilityWindow({
   end: Date;
   excludeWindowId?: string;
 }) {
+  // Half-open overlap logic allows back-to-back conflicts where one window ends
+  // exactly when the next begins without treating that boundary as a collision.
   return prisma.availabilityWindow.findFirst({
     where: {
       productionId,
@@ -104,6 +106,8 @@ export async function markConflictsSubmitted({
 export async function getAvailabilityCompleteness(
   productionId: string
 ): Promise<AvailabilityCompleteness> {
+  // Scheduling only blocks on non-director members. Director-equivalent roles
+  // coordinate the solve, so their own conflicts are informational rather than required.
   const production = await prisma.production.findUnique({
     where: { id: productionId },
     select: {

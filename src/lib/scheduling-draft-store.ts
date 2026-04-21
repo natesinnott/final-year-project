@@ -47,6 +47,8 @@ export async function getSchedulingDraftState({
     return normalized;
   }
 
+  // A malformed persisted draft should not block the whole scheduling page; drop it
+  // and let the editor recover from canonical production defaults instead.
   console.error("Ignoring invalid scheduling draft payload.", {
     draftId: draft.id,
     productionId,

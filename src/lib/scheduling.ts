@@ -474,6 +474,8 @@ export function validateSolverPrecedences({
   blockIds: string[];
   precedences: SolverPrecedence[];
 }) {
+  // The editor models dependencies as a DAG, so reject bad edges here before an
+  // impossible graph reaches the external solver.
   const blockIdSet = new Set(blockIds);
   const errors: string[] = [];
   const adjacency = new Map<string, Set<string>>();
@@ -549,7 +551,8 @@ export function buildSolverPayload({
   blocks: ScheduleBuilderBlock[];
   members: TeamAvailabilityMember[];
 }): SolverPayload | null {
-  // Normalises client input into UTC representation
+  // Build the strict solver contract from editable UI state. This is where
+  // local wall-clock input becomes UTC and user-facing block ids become solver ids.
   const parsedHorizonStart = parseSchedulerLocalDateTime(horizonStart, timeZone);
   const parsedHorizonEnd = parseSchedulerLocalDateTime(horizonEnd, timeZone);
   const allowedTimeWindowErrors = validateAllowedTimeWindow({
@@ -603,6 +606,8 @@ export function buildSolverPayload({
       end_local_time: allowedEndTime,
     },
     precedences: blocks.flatMap((block) =>
+      // Dependencies are authored in client-id space, then remapped onto the
+      // canonical ids we hand to the solver so placements can be joined back safely.
       block.predecessorBlockIds.map((predecessorBlockId) => ({
         block_a: buildSolverBlockId({
           clientId: predecessorBlockId,

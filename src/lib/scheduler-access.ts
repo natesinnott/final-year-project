@@ -47,6 +47,8 @@ export async function canAccessProductionScheduling(
   userId: string,
   productionId: string
 ): Promise<boolean> {
+  // Scheduling is intentionally narrower than basic production membership: only
+  // director-equivalent production roles may solve schedules or view team conflicts.
   const context = await getProductionMemberContext(userId, productionId);
   if (!context || !context.isProductionMember || !context.productionMemberRole) {
     return false;

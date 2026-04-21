@@ -126,6 +126,9 @@ export function utcToZoned(utcInstant: string | Date, timeZone: string): LocalWa
   return toLocalParts(utcDate.getTime(), timeZone);
 }
 
+// Convert a wall-clock value into a real instant without relying on platform parsing.
+// DST gaps return null by default, while DST overlaps resolve to the earlier instant
+// so round-trips stay deterministic across browsers and Node.
 export function zonedToUtc(
   local: LocalWallClock,
   timeZone: string,
@@ -313,6 +316,8 @@ export function localRangeToUtc(
   endLocal: LocalWallClock,
   timeZone: string
 ): { startUtcIso: string; endUtcIso: string } | null {
+  // Snap in local time before converting to UTC so the 15-minute rule matches what
+  // the user painted, even on DST transition days that are not 24 hours long.
   const snappedStart = snapWallClockTo15(startLocal, "floor");
   const snappedEnd = snapWallClockTo15(endLocal, "ceil");
 

@@ -6,6 +6,8 @@ const STAGE_MANAGER_ROLE = "STAGE_MANAGER";
 const FALLBACK_TIME_ZONE = "UTC";
 
 export function normalizeProductionTimeZone(timeZone: string | null | undefined) {
+  // Attendance pages need a deterministic local-day boundary even before scheduling
+  // has published and locked a production time zone.
   if (timeZone && isValidTimeZone(timeZone)) {
     return timeZone;
   }
@@ -17,6 +19,8 @@ export async function getAttendanceAccessContext(
   userId: string,
   productionId: string
 ) {
+  // Compute attendance capabilities on the server from the caller's current
+  // production role so clients never infer broader access from UI state alone.
   const production = await prisma.production.findUnique({
     where: { id: productionId },
     select: {

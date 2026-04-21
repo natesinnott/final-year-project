@@ -120,6 +120,8 @@ function getPublishedRehearsalVisibilityFilter(userId: string, canViewAll: boole
     return {};
   }
 
+  // Cast and crew only see rehearsals they are actually called for; wider staff
+  // visibility is granted server-side by role, not by client branching.
   return {
     participants: {
       some: {
@@ -136,6 +138,7 @@ function isFutureRehearsal(start: Date, referenceDate = new Date()) {
 export function getEffectiveAttendanceStatus(
   attendance: { status: AttendanceStatus } | null | undefined
 ) {
+  // PRESENT is implicit. Persisted rows only exist for exceptions like absences and no-shows.
   return attendance?.status ?? AttendanceStatus.PRESENT;
 }
 
@@ -387,6 +390,8 @@ export async function getTodayAttendanceBlocks({
     where: {
       productionId,
       status: RehearsalStatus.PUBLISHED,
+      // Use interval overlap rather than "starts today" so cross-midnight rehearsals
+      // still appear in the production's local "today" view.
       start: {
         lt: todayRange.endUtc,
       },

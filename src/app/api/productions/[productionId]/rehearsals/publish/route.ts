@@ -43,6 +43,8 @@ function parseIsoDate(value: string | undefined) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+// Publishing treats the solver output as untrusted client input. We re-validate
+// the horizon, feasibility state, membership, and placement bounds before persisting.
 export async function POST(request: Request, { params }: RouteParams) {
   const session = await auth.api.getSession({ headers: request.headers });
   const userId = session?.user?.id;

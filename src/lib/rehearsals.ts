@@ -124,6 +124,9 @@ export async function publishProductionRehearsals({
   rehearsals: PersistedRehearsalInput[];
   clearSchedulingDrafts?: boolean;
 }) {
+  // Publishing reconciles the future schedule instead of replacing it blindly.
+  // Matching rehearsals keep stable ids and attendance where possible; only
+  // unmatched future rehearsals are deleted and audited away.
   return prisma.$transaction(async (tx) => {
     const production = await tx.production.findUnique({
       where: {
@@ -146,6 +149,8 @@ export async function publishProductionRehearsals({
     }
 
     if (!production.timeZone) {
+      // The first published solve locks the production time zone so every later
+      // calendar/day-based view shares one stable definition of "local day".
       await tx.production.update({
         where: {
           id: productionId,
@@ -183,6 +188,8 @@ export async function publishProductionRehearsals({
       },
     });
 
+    // Title + exact UTC start/end is the stable identity for solver-generated
+    // rehearsals, allowing reruns to update participants without changing ids.
     const existingByKey = new Map<
       string,
       (typeof existingFutureRehearsals)[number]
@@ -312,6 +319,7 @@ export async function publishProductionRehearsals({
     }
 
     if (clearSchedulingDrafts) {
+      // Drafts are per-user, but once a schedule is published they are stale for everyone.
       await tx.schedulingDraft.deleteMany({
         where: {
           productionId,
