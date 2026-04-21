@@ -4,6 +4,7 @@ import { getProductionAttendanceReport } from "@/lib/attendance-read";
 import { formatInstantInTimeZone } from "@/lib/availabilityTime";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import ProductionNav from "@/components/production-nav";
 
 export const metadata = {
   title: "StageSuite | Attendance report",
@@ -52,32 +53,23 @@ export default async function AttendanceReportPage({
     <main className="min-h-dvh bg-slate-950 p-6 text-slate-100">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
-                Attendance report
-              </p>
-              <h1 className="mt-3 text-2xl font-semibold text-white">
-                {access.productionName}
-              </h1>
-              <p className="mt-2 text-sm text-slate-300">Non-present entries in {access.productionTimeZone}.</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <a
-                href={`/app/productions/${productionId}/rehearsals`}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                Rehearsals
-              </a>
-              <a
-                href={`/app/productions/${productionId}/attendance/today`}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                Today interface
-              </a>
-            </div>
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
+            Attendance report
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">
+            {access.productionName}
+          </h1>
+          <p className="mt-2 text-sm text-slate-300">
+            Non-present entries in {access.productionTimeZone}.
+          </p>
         </header>
+
+        <ProductionNav
+          productionId={productionId}
+          canAccessScheduling={access.isDirectorRole}
+          canAccessToday={access.canManageAttendance}
+          canAccessAttendance={access.canViewAttendanceReport}
+        />
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 shadow-sm">
           {rows.length === 0 ? (

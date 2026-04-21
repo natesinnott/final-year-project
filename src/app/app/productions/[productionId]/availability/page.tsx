@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getAttendanceAccessContext } from "@/lib/attendance-access";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getProductionMemberContext } from "@/lib/scheduler-access";
+import ProductionNav from "@/components/production-nav";
 import AvailabilityClient from "./availability-client";
 
 export const metadata = {
@@ -28,59 +28,32 @@ export default async function ProductionAvailabilityPage({
   }
 
   const { productionId } = await params;
-  const production = await prisma.production.findUnique({
-    where: { id: productionId },
-    select: { id: true, name: true },
-  });
-
-  if (!production) {
+  const access = await getAttendanceAccessContext(userId, productionId);
+  if (!access?.isMember) {
     redirect("/app/productions");
   }
-
-  const memberContext = await getProductionMemberContext(userId, productionId);
-  if (!memberContext?.isProductionMember) {
-    redirect("/app/productions");
-  }
-
-  const canAccessScheduling = Boolean(
-    memberContext.productionMemberRole &&
-      memberContext.directorRoles.includes(memberContext.productionMemberRole)
-  );
 
   return (
     <main className="min-h-dvh bg-slate-950 text-slate-100 p-6">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
-                Conflicts
-              </p>
-              <h1 className="mt-3 text-2xl font-semibold text-white">
-                {production.name}
-              </h1>
-              <p className="mt-2 text-sm text-slate-300">Add conflict windows.</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <a
-                href={`/app?productionId=${production.id}`}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                Back to dashboard
-              </a>
-              {canAccessScheduling ? (
-                <a
-                  href={`/app/productions/${production.id}/schedule`}
-                  className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-                >
-                  Scheduling
-                </a>
-              ) : null}
-            </div>
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
+            Conflicts
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">
+            {access.productionName}
+          </h1>
+          <p className="mt-2 text-sm text-slate-300">Add conflict windows.</p>
         </header>
 
-        <AvailabilityClient productionId={production.id} />
+        <ProductionNav
+          productionId={productionId}
+          canAccessScheduling={access.isDirectorRole}
+          canAccessToday={access.canManageAttendance}
+          canAccessAttendance={access.canViewAttendanceReport}
+        />
+
+        <AvailabilityClient productionId={productionId} />
       </div>
     </main>
   );

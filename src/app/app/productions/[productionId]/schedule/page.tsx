@@ -5,6 +5,7 @@ import { getTeamAvailabilitySnapshot } from "@/lib/availability";
 import { getSchedulingDraftState } from "@/lib/scheduling-draft-store";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import ProductionNav from "@/components/production-nav";
 import ScheduleClient from "./schedule-client";
 
 export const metadata = {
@@ -70,50 +71,21 @@ export default async function ProductionSchedulePage({
     <main className="min-h-dvh bg-slate-950 text-slate-100 p-6">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
-                Scheduling
-              </p>
-              <h1 className="mt-3 text-2xl font-semibold text-white">
-                {production.name}
-              </h1>
-              <p className="mt-2 text-sm text-slate-300">Build and publish schedules.</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <a
-                href={`/app?productionId=${production.id}`}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                Back to dashboard
-              </a>
-              <a
-                href={`/app/productions/${production.id}/availability`}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                My conflicts
-              </a>
-              <a
-                href={`/app/productions/${production.id}/availability/team`}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                Cast &amp; crew conflicts
-              </a>
-              <a
-                href={`/app/productions/${production.id}/rehearsals`}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                Published rehearsals
-              </a>
-              <a
-                href={`/app/productions/${production.id}/settings`}
-                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:border-slate-500"
-              >
-                Production settings
-              </a>
-            </div>
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
+            Scheduling
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">
+            {production.name}
+          </h1>
+          <p className="mt-2 text-sm text-slate-300">Build and publish schedules.</p>
         </header>
+
+        <ProductionNav
+          productionId={production.id}
+          canAccessScheduling
+          canAccessToday
+          canAccessAttendance
+        />
 
         <ScheduleClient
           productionId={production.id}
