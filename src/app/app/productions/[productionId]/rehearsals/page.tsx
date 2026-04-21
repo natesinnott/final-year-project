@@ -57,18 +57,13 @@ export default async function ProductionRehearsalsPage({
   return (
     <main className="min-h-dvh bg-slate-950 p-6 text-slate-100">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
+        <header className="rounded-2xl border border-slate-800 bg-slate-900/40 px-5 py-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300">
             Published rehearsals
           </p>
-          <h1 className="mt-3 text-2xl font-semibold text-white">
+          <h1 className="mt-2 text-lg font-semibold text-white">
             {production.name}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-300">
-            {access.canManageAttendance
-              ? "Review rosters and attendance."
-              : "View your rehearsal calls."}
-          </p>
         </header>
 
         <ProductionNav
