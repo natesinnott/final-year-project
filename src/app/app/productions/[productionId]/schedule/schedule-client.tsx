@@ -426,6 +426,9 @@ export default function ScheduleClient({
   const [blocks, setBlocks] = useState<BlockDraft[]>(
     initialDraft?.blocks ?? [createEmptyBlock()]
   );
+  const [collapsedBlockIds, setCollapsedBlockIds] = useState<Set<string>>(
+    () => new Set()
+  );
   const [hasUserEditedDraft, setHasUserEditedDraft] = useState(false);
   const [lastPersistedDraftSignature, setLastPersistedDraftSignature] = useState(() =>
     buildSchedulingDraftSignature(initialDraft)
@@ -1086,6 +1089,33 @@ export default function ScheduleClient({
           predecessorBlockIds: block.predecessorBlockIds.filter((id) => id !== clientId),
         }))
     );
+    setCollapsedBlockIds((current) => {
+      const next = new Set(current);
+      next.delete(clientId);
+      return next;
+    });
+  }
+
+  function toggleBlockCollapsed(clientId: string) {
+    setCollapsedBlockIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(clientId)) {
+        next.delete(clientId);
+      } else {
+        next.add(clientId);
+      }
+
+      return next;
+    });
+  }
+
+  function collapseAllBlocks() {
+    setCollapsedBlockIds(new Set(blocks.map((block) => block.clientId)));
+  }
+
+  function expandAllBlocks() {
+    setCollapsedBlockIds(new Set());
   }
 
   const handleDebugTitleTap = useCallback(() => {
@@ -1320,6 +1350,25 @@ export default function ScheduleClient({
               </button>
             </div>
 
+            {!hasNoBlocks ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-500 disabled:opacity-50"
+                  onClick={collapseAllBlocks}
+                  disabled={collapsedBlockIds.size === blocks.length}
+                >
+                  Collapse all
+                </button>
+                <button
+                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-500 disabled:opacity-50"
+                  onClick={expandAllBlocks}
+                  disabled={collapsedBlockIds.size === 0}
+                >
+                  Expand all
+                </button>
+              </div>
+            ) : null}
+
             {dependencyErrors.length > 0 ? (
               <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
                 {dependencyErrors.join(" ")}
@@ -1334,6 +1383,8 @@ export default function ScheduleClient({
               <div className="mt-4 grid gap-4">
                 {blocks.map((block, index) => {
                   const errors = blockErrors[block.clientId] ?? [];
+                  const isCollapsed = collapsedBlockIds.has(block.clientId);
+                  const blockLabel = block.label.trim() || `Block ${index + 1}`;
                   const otherBlocks = blocks.filter(
                     (candidate) => candidate.clientId !== block.clientId
                   );
@@ -1344,149 +1395,180 @@ export default function ScheduleClient({
                       className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                             Block {index + 1}
                           </p>
+                          <h4 className="mt-1 break-words text-base font-semibold text-white">
+                            {blockLabel}
+                          </h4>
                           <p className="mt-1 text-sm text-slate-400">
+                            {block.durationMinutes || "0"} minutes ·{" "}
+                            {block.requiredPeopleIds.length} people ·{" "}
+                            {block.predecessorBlockIds.length} dependencies
+                          </p>
+                          <p className="mt-1 break-all text-xs text-slate-500">
                             Solver id: {buildSolverBlockId(normalizeBlock(block))}
                           </p>
                         </div>
-                        <button
-                          className="rounded-lg border border-rose-500/60 px-3 py-1 text-xs font-semibold text-rose-200 hover:border-rose-400"
-                          onClick={() => deleteBlock(block.clientId)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-
-                      <div className="mt-4 grid gap-4 md:grid-cols-[1.6fr_0.7fr]">
-                        <label className="grid gap-2 text-sm text-slate-300">
-                          <span className="font-medium text-white">Block label</span>
-                          <input
-                            type="text"
-                            className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
-                            placeholder="Act 1 Scene 2"
-                            value={block.label}
-                            onChange={(event) =>
-                              updateBlock(block.clientId, { label: event.target.value })
-                            }
-                          />
-                        </label>
-                        <label className="grid gap-2 text-sm text-slate-300">
-                          <span className="font-medium text-white">Duration (minutes)</span>
-                          <input
-                            type="number"
-                            min={SCHEDULER_TIME_GRANULARITY_MINUTES}
-                            step={SCHEDULER_TIME_GRANULARITY_MINUTES}
-                            className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
-                            value={block.durationMinutes}
-                            onChange={(event) =>
-                              updateBlock(block.clientId, {
-                                durationMinutes: event.target.value,
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
-
-                      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                        <div>
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                              <h4 className="text-sm font-medium text-white">Required people</h4>
-                              <p className="text-xs text-slate-400">Required for this block.</p>
-                            </div>
-                            <span className="text-xs text-slate-400">
-                              Selected: {block.requiredPeopleIds.length}
-                            </span>
-                          </div>
-
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            {members.map((member) => (
-                              <label
-                                key={`${block.clientId}-${member.userId}`}
-                                className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-3 text-sm text-slate-200"
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-900 text-amber-300"
-                                  checked={block.requiredPeopleIds.includes(member.userId)}
-                                  onChange={() => toggleRequiredPerson(block.clientId, member.userId)}
-                                />
-                                <span>
-                                  <span className="block font-medium text-white">{member.name}</span>
-                                  <span className="block text-xs text-slate-400">{member.role}</span>
-                                </span>
-                              </label>
-                            ))}
-                          </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            className="rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 hover:border-slate-500"
+                            onClick={() => toggleBlockCollapsed(block.clientId)}
+                            aria-expanded={!isCollapsed}
+                            aria-controls={`schedule-block-${block.clientId}`}
+                          >
+                            {isCollapsed ? "Expand" : "Collapse"}
+                          </button>
+                          <button
+                            className="rounded-lg border border-rose-500/60 px-3 py-1 text-xs font-semibold text-rose-200 hover:border-rose-400"
+                            onClick={() => deleteBlock(block.clientId)}
+                          >
+                            Delete
+                          </button>
                         </div>
+                      </div>
 
-                        <div>
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                              <h4 className="text-sm font-medium text-white">Dependencies</h4>
-                              <p className="text-xs text-slate-400">Must finish first.</p>
-                            </div>
-                            <span className="text-xs text-slate-400">
-                              Selected: {block.predecessorBlockIds.length}
-                            </span>
+                      {!isCollapsed ? (
+                        <div id={`schedule-block-${block.clientId}`}>
+                          <div className="mt-4 grid gap-4 md:grid-cols-[1.6fr_0.7fr]">
+                            <label className="grid gap-2 text-sm text-slate-300">
+                              <span className="font-medium text-white">Block label</span>
+                              <input
+                                type="text"
+                                className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
+                                placeholder="Act 1 Scene 2"
+                                value={block.label}
+                                onChange={(event) =>
+                                  updateBlock(block.clientId, { label: event.target.value })
+                                }
+                              />
+                            </label>
+                            <label className="grid gap-2 text-sm text-slate-300">
+                              <span className="font-medium text-white">Duration (minutes)</span>
+                              <input
+                                type="number"
+                                min={SCHEDULER_TIME_GRANULARITY_MINUTES}
+                                step={SCHEDULER_TIME_GRANULARITY_MINUTES}
+                                className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
+                                value={block.durationMinutes}
+                                onChange={(event) =>
+                                  updateBlock(block.clientId, {
+                                    durationMinutes: event.target.value,
+                                  })
+                                }
+                              />
+                            </label>
                           </div>
 
-                          {otherBlocks.length === 0 ? (
-                            <div className="mt-3 rounded-xl border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-400">
-                              Add another block.
-                            </div>
-                          ) : (
-                            <div className="mt-3 grid gap-2">
-                              {otherBlocks.map((candidate, candidateIndex) => {
-                                const candidateLabel =
-                                  candidate.label.trim() || `Block ${candidateIndex + 1}`;
-                                const isChecked = block.predecessorBlockIds.includes(
-                                  candidate.clientId
-                                );
-                                const isDisabled =
-                                  !isChecked &&
-                                  wouldCreateDependencyCycle({
-                                    edges: draftPrecedences,
-                                    fromBlockId: candidate.clientId,
-                                    toBlockId: block.clientId,
-                                  });
+                          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                            <div>
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <h4 className="text-sm font-medium text-white">Required people</h4>
+                                  <p className="text-xs text-slate-400">Required for this block.</p>
+                                </div>
+                                <span className="text-xs text-slate-400">
+                                  Selected: {block.requiredPeopleIds.length}
+                                </span>
+                              </div>
 
-                                return (
+                              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                {members.map((member) => (
                                   <label
-                                    key={`${block.clientId}-${candidate.clientId}-dependency`}
-                                    className={`flex items-start gap-3 rounded-xl border px-3 py-3 text-sm ${
-                                      isDisabled
-                                        ? "border-slate-800 bg-slate-950/30 text-slate-500"
-                                        : "border-slate-800 bg-slate-950/60 text-slate-200"
-                                    }`}
+                                    key={`${block.clientId}-${member.userId}`}
+                                    className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-3 text-sm text-slate-200"
                                   >
                                     <input
                                       type="checkbox"
                                       className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-900 text-amber-300"
-                                      checked={isChecked}
-                                      disabled={isDisabled}
+                                      checked={block.requiredPeopleIds.includes(member.userId)}
                                       onChange={() =>
-                                        togglePredecessor(block.clientId, candidate.clientId)
+                                        toggleRequiredPerson(block.clientId, member.userId)
                                       }
                                     />
                                     <span>
-                                      <span className="block font-medium text-white">
-                                        {candidateLabel}
-                                      </span>
-                                      <span className="block text-xs text-slate-400">
-                                        Must finish before this block starts
-                                      </span>
+                                      <span className="block font-medium text-white">{member.name}</span>
+                                      <span className="block text-xs text-slate-400">{member.role}</span>
                                     </span>
                                   </label>
-                                );
-                              })}
+                                ))}
+                              </div>
                             </div>
-                          )}
+
+                            <div>
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <h4 className="text-sm font-medium text-white">Dependencies</h4>
+                                  <p className="text-xs text-slate-400">Must finish first.</p>
+                                </div>
+                                <span className="text-xs text-slate-400">
+                                  Selected: {block.predecessorBlockIds.length}
+                                </span>
+                              </div>
+
+                              {otherBlocks.length === 0 ? (
+                                <div className="mt-3 rounded-xl border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-400">
+                                  Add another block.
+                                </div>
+                              ) : (
+                                <div className="mt-3 grid gap-2">
+                                  {otherBlocks.map((candidate, candidateIndex) => {
+                                    const candidateLabel =
+                                      candidate.label.trim() || `Block ${candidateIndex + 1}`;
+                                    const isChecked = block.predecessorBlockIds.includes(
+                                      candidate.clientId
+                                    );
+                                    const isDisabled =
+                                      !isChecked &&
+                                      wouldCreateDependencyCycle({
+                                        edges: draftPrecedences,
+                                        fromBlockId: candidate.clientId,
+                                        toBlockId: block.clientId,
+                                      });
+
+                                    return (
+                                      <label
+                                        key={`${block.clientId}-${candidate.clientId}-dependency`}
+                                        className={`flex items-start gap-3 rounded-xl border px-3 py-3 text-sm ${
+                                          isDisabled
+                                            ? "border-slate-800 bg-slate-950/30 text-slate-500"
+                                            : "border-slate-800 bg-slate-950/60 text-slate-200"
+                                        }`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-900 text-amber-300"
+                                          checked={isChecked}
+                                          disabled={isDisabled}
+                                          onChange={() =>
+                                            togglePredecessor(block.clientId, candidate.clientId)
+                                          }
+                                        />
+                                        <span>
+                                          <span className="block font-medium text-white">
+                                            {candidateLabel}
+                                          </span>
+                                          <span className="block text-xs text-slate-400">
+                                            Must finish before this block starts
+                                          </span>
+                                        </span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div
+                          id={`schedule-block-${block.clientId}`}
+                          className="mt-4 rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-3 text-sm text-slate-400"
+                        >
+                          Block details collapsed.
+                        </div>
+                      )}
 
                       {errors.length > 0 ? (
                         <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">

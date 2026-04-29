@@ -8,6 +8,7 @@
     "start": "node server.js",
     "lint": "eslint",
     "reset:demo-productions": "dotenv -e .env -- node --experimental-strip-types scripts/reset-demo-productions.ts",
+    "seed:csv-production": "dotenv -e .env -- node --experimental-strip-types scripts/seed-production-from-csv.ts",
     "test:availability-time": "node scripts/run-node-test.mjs src/lib/availabilityTime.test.ts",
     "test:scheduling": "node scripts/run-node-test.mjs src/lib/scheduling.test.ts",
     "test:scheduling-draft": "node scripts/run-node-test.mjs src/lib/scheduling-draft.test.ts",
