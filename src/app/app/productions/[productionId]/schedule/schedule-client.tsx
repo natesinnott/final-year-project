@@ -392,6 +392,7 @@ export default function ScheduleClient({
   const debugVisibleByDefault = process.env.NODE_ENV !== "production";
   const dateTime = useBrowserDateTime();
   const schedulerWarmup = useSchedulerWarmup(productionId);
+  const topAddBlockButtonRef = useRef<HTMLButtonElement | null>(null);
   const debugTitleTapTimestampsRef = useRef<number[]>([]);
   const detectedTimeZone = useMemo(() => detectSystemTimeZone(), []);
   const hasLockedTimeZone = Boolean(
@@ -449,6 +450,7 @@ export default function ScheduleClient({
   const [jobStatus, setJobStatus] = useState<string | null>(null);
   const [debugVisible, setDebugVisible] = useState(debugVisibleByDefault);
   const [debugVisibilityReady, setDebugVisibilityReady] = useState(false);
+  const [isTopAddBlockButtonVisible, setIsTopAddBlockButtonVisible] = useState(true);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -499,6 +501,48 @@ export default function ScheduleClient({
 
     return () => {
       window.removeEventListener("keydown", handleDebugShortcut);
+    };
+  }, []);
+
+  useEffect(() => {
+    const button = topAddBlockButtonRef.current;
+
+    if (!button || typeof window === "undefined") {
+      return;
+    }
+
+    const observedButton = button;
+
+    function updateVisibility() {
+      const rect = observedButton.getBoundingClientRect();
+      setIsTopAddBlockButtonVisible(
+        rect.bottom > 0 &&
+          rect.top < window.innerHeight &&
+          rect.right > 0 &&
+          rect.left < window.innerWidth
+      );
+    }
+
+    updateVisibility();
+
+    if (typeof IntersectionObserver === "undefined") {
+      window.addEventListener("scroll", updateVisibility, { passive: true });
+      window.addEventListener("resize", updateVisibility);
+
+      return () => {
+        window.removeEventListener("scroll", updateVisibility);
+        window.removeEventListener("resize", updateVisibility);
+      };
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setIsTopAddBlockButtonVisible(Boolean(entry?.isIntersecting));
+    });
+
+    observer.observe(observedButton);
+
+    return () => {
+      observer.disconnect();
     };
   }, []);
 
@@ -1034,6 +1078,42 @@ export default function ScheduleClient({
     setHasUserEditedDraft(true);
   }
 
+  function scrollToBlockEditor(clientId: string) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const card = document.getElementById(`schedule-block-card-${clientId}`);
+        const labelInput = document.getElementById(`schedule-block-label-${clientId}`);
+
+        card?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+        if (labelInput instanceof HTMLInputElement) {
+          labelInput.focus({ preventScroll: true });
+        }
+      });
+    });
+  }
+
+  function addBlock() {
+    const block = createEmptyBlock();
+
+    markDraftEdited();
+    setBlocks((current) => [...current, block]);
+    setCollapsedBlockIds((current) => {
+      if (!current.has(block.clientId)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.delete(block.clientId);
+      return next;
+    });
+    scrollToBlockEditor(block.clientId);
+  }
+
   function updateBlock(clientId: string, updates: Partial<BlockDraft>) {
     markDraftEdited();
     setBlocks((current) =>
@@ -1340,11 +1420,9 @@ export default function ScheduleClient({
                 </h3>
               </div>
               <button
+                ref={topAddBlockButtonRef}
                 className="rounded-xl border border-amber-300/60 px-4 py-2 text-sm font-semibold text-amber-100 hover:border-amber-200"
-                onClick={() => {
-                  markDraftEdited();
-                  setBlocks((current) => [...current, createEmptyBlock()]);
-                }}
+                onClick={addBlock}
               >
                 Add block
               </button>
@@ -1385,6 +1463,7 @@ export default function ScheduleClient({
                   const errors = blockErrors[block.clientId] ?? [];
                   const isCollapsed = collapsedBlockIds.has(block.clientId);
                   const blockLabel = block.label.trim() || `Block ${index + 1}`;
+                  const participantCount = block.requiredPeopleIds.length;
                   const otherBlocks = blocks.filter(
                     (candidate) => candidate.clientId !== block.clientId
                   );
@@ -1392,24 +1471,45 @@ export default function ScheduleClient({
                   return (
                     <article
                       key={block.clientId}
+                      id={`schedule-block-card-${block.clientId}`}
                       className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                            Block {index + 1}
-                          </p>
-                          <h4 className="mt-1 break-words text-base font-semibold text-white">
-                            {blockLabel}
-                          </h4>
-                          <p className="mt-1 text-sm text-slate-400">
-                            {block.durationMinutes || "0"} minutes ·{" "}
-                            {block.requiredPeopleIds.length} people ·{" "}
-                            {block.predecessorBlockIds.length} dependencies
-                          </p>
-                          <p className="mt-1 break-all text-xs text-slate-500">
-                            Solver id: {buildSolverBlockId(normalizeBlock(block))}
-                          </p>
+                        <div className="min-w-0 flex-1">
+                          {isCollapsed ? (
+                            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                              <span className="shrink-0 font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                Block {index + 1}
+                              </span>
+                              <span className="min-w-0 break-words font-semibold text-white">
+                                {blockLabel}
+                              </span>
+                              <span className="shrink-0 text-slate-400">
+                                {block.durationMinutes || "0"} minutes
+                              </span>
+                              <span className="shrink-0 text-slate-400">
+                                {participantCount}{" "}
+                                {participantCount === 1 ? "participant" : "participants"}
+                              </span>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                                Block {index + 1}
+                              </p>
+                              <h4 className="mt-1 break-words text-base font-semibold text-white">
+                                {blockLabel}
+                              </h4>
+                              <p className="mt-1 text-sm text-slate-400">
+                                {block.durationMinutes || "0"} minutes ·{" "}
+                                {participantCount} people ·{" "}
+                                {block.predecessorBlockIds.length} dependencies
+                              </p>
+                              <p className="mt-1 break-all text-xs text-slate-500">
+                                Solver id: {buildSolverBlockId(normalizeBlock(block))}
+                              </p>
+                            </>
+                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <button
@@ -1435,6 +1535,7 @@ export default function ScheduleClient({
                             <label className="grid gap-2 text-sm text-slate-300">
                               <span className="font-medium text-white">Block label</span>
                               <input
+                                id={`schedule-block-label-${block.clientId}`}
                                 type="text"
                                 className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-slate-100 outline-none focus:border-amber-300"
                                 placeholder="Act 1 Scene 2"
@@ -1561,14 +1662,7 @@ export default function ScheduleClient({
                             </div>
                           </div>
                         </div>
-                      ) : (
-                        <div
-                          id={`schedule-block-${block.clientId}`}
-                          className="mt-4 rounded-xl border border-slate-800 bg-slate-950/30 px-4 py-3 text-sm text-slate-400"
-                        >
-                          Block details collapsed.
-                        </div>
-                      )}
+                      ) : null}
 
                       {errors.length > 0 ? (
                         <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
@@ -1578,6 +1672,17 @@ export default function ScheduleClient({
                     </article>
                   );
                 })}
+
+                {!isTopAddBlockButtonVisible ? (
+                  <div className="flex justify-end">
+                    <button
+                      className="rounded-xl border border-amber-300/60 px-4 py-2 text-sm font-semibold text-amber-100 hover:border-amber-200"
+                      onClick={addBlock}
+                    >
+                      Add block
+                    </button>
+                  </div>
+                ) : null}
               </div>
             )}
           </section>
